@@ -162,7 +162,18 @@ def train(get_model, get_opt, num_models, train_dl, valid_dl, test_dl, perturb_d
                 
                 x_tilde = perturb_sampler()[0]
                 
-                erm_loss = F.cross_entropy(m(x), y)
+                logits= m(x)
+                out = torch.softmax(logits, dim=1) ## B*n_classes
+                preds= torch.argmax(out, dim=1) 
+                train_acc = (preds == y)
+                train_acc = torch.sum(train_acc)/len(train_acc)
+                train_rate = (preds == 1)
+                train_rate = torch.sum(train_rate)/len(train_rate)
+
+                if not(args.nologger):
+                    wandb.log({f"train/m{m_idx+1}_semantic_acc":train_acc.item(), f"train/m{m_idx+1}_rate":train_rate.item(), f"train/m{m_idx+1}_probs": wandb.Histogram(out.flatten().detach().cpu().numpy())})
+
+                erm_loss = F.cross_entropy(logits, y)
                 
                 if use_diversity_reg and m_idx != 0:
                     
