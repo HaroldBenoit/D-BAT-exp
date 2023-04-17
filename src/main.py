@@ -101,12 +101,11 @@ def get_args():
     
     return args
 
-def eval_val_metrics(m:nn.Module, m_idx:int, valid_dl:DataLoader, args, itr:int, epoch:int, adv_loss, erm_loss, loss, ensemble_early_stopped, last_best_valid_acc, scheduler, stats):
+def eval_val_metrics(m:nn.Module, m_idx:int, valid_dl:DataLoader, args, itr:int, epoch:int, adv_loss, erm_loss, loss, ensemble_early_stopped, last_best_valid_acc, scheduler, stats, logs):
     m.eval()
     valid_acc = get_acc(m, valid_dl)
     if not(args.nologger):
-        wandb.log({f"valid/m{m_idx+1}_semantic_acc": valid_acc})
-
+        logs[f"valid/m{m_idx+1}_semantic_acc"] = valid_acc
 
     p_s = f"[m{m_idx+1}] {epoch}:{itr} [train] erm-loss: {erm_loss.item():.3f},"  + \
           f" adv-loss: {adv_loss.item():.3f} [valid] acc: {valid_acc:.3f} "
@@ -122,6 +121,8 @@ def eval_val_metrics(m:nn.Module, m_idx:int, valid_dl:DataLoader, args, itr:int,
     if math.isnan(loss.item()): 
         raise(ValueError("Loss is NaN. :("))
     m.train()
+
+    return logs
 
 def train(get_model, get_opt, num_models, train_dl, valid_dl, test_dl, perturb_dl, get_scheduler=None, max_epoch=10, 
           eval_freq=400, ckpt_freq=1, ckpt_path="", alpha=1.0, use_diversity_reg=True, dbat_loss_type='v1', extra_args=None):
@@ -155,11 +156,14 @@ def train(get_model, get_opt, num_models, train_dl, valid_dl, test_dl, perturb_d
         scheduler = get_scheduler(opt) if get_scheduler is not None else None
         
         perturb_sampler = dl_to_sampler(perturb_dl)
+
         
         for epoch in tqdm(range(start_epoch, max_epoch)):
             for x, y in train_dl:
                 itr += 1
-                
+                ## custom step to be able to compare runs
+                logs = {"custom_step":itr}
+
                 x_tilde = perturb_sampler()[0]
                 
                 logits= m(x)
@@ -171,7 +175,8 @@ def train(get_model, get_opt, num_models, train_dl, valid_dl, test_dl, perturb_d
                 train_rate = torch.sum(train_rate)/len(train_rate)
 
                 if not(args.nologger):
-                    wandb.log({f"train/m{m_idx+1}_semantic_acc":train_acc.item(), f"train/m{m_idx+1}_rate":train_rate.item(), f"train/m{m_idx+1}_probs": wandb.Histogram(out.flatten().detach().cpu().numpy())})
+                    train_logs = {f"train/m{m_idx+1}_semantic_acc":train_acc.item(), f"train/m{m_idx+1}_rate":train_rate.item(), f"train/m{m_idx+1}_probs": wandb.Histogram(out.flatten().detach().cpu().numpy())}
+                    logs = {**logs, **train_logs}
 
                 erm_loss = F.cross_entropy(logits, y)
                 
@@ -217,7 +222,9 @@ def train(get_model, get_opt, num_models, train_dl, valid_dl, test_dl, perturb_d
                 loss = erm_loss + alpha * adv_loss
 
                 if not(args.nologger):
-                    wandb.log({f"train/m{m_idx+1}_erm_loss":erm_loss.item(), f"train/m{m_idx+1}_adv_loss":adv_loss.item(), f"train/m{m_idx+1}_loss": loss.item()})
+                    train_logs= {f"train/m{m_idx+1}_erm_loss":erm_loss.item(), f"train/m{m_idx+1}_adv_loss":adv_loss.item(), f"train/m{m_idx+1}_loss": loss.item()}
+                    logs = {**logs, **train_logs}
+
 
                 opt.zero_grad()
                 loss.backward()
@@ -226,8 +233,11 @@ def train(get_model, get_opt, num_models, train_dl, valid_dl, test_dl, perturb_d
                     scheduler.step()
 
                 if itr % eval_freq == 0:
-                    eval_val_metrics(m=m,m_idx=m_idx, valid_dl=valid_dl, args=args, itr=itr, epoch=epoch, adv_loss=adv_loss,
-                                     erm_loss=erm_loss, loss=loss, ensemble_early_stopped=ensemble_early_stopped, last_best_valid_acc=last_best_valid_acc,scheduler=scheduler, stats=stats)
+                    logs = eval_val_metrics(m=m,m_idx=m_idx, valid_dl=valid_dl, args=args, itr=itr, epoch=epoch, adv_loss=adv_loss,
+                                     erm_loss=erm_loss, loss=loss, ensemble_early_stopped=ensemble_early_stopped, last_best_valid_acc=last_best_valid_acc,scheduler=scheduler, stats=stats, logs=logs)
+                
+                if not(args.nologger):
+                    wandb.log(logs)
                 
             if epoch % ckpt_freq == 0:
                 torch.save({'ensemble': [model.state_dict() for model in ensemble], 
@@ -241,8 +251,9 @@ def train(get_model, get_opt, num_models, train_dl, valid_dl, test_dl, perturb_d
                            }, ckpt_path)
                 
             if epoch == (max_epoch -1):
-                eval_val_metrics(m=m,m_idx=m_idx, valid_dl=valid_dl, args=args, itr=itr, epoch=epoch, adv_loss=adv_loss,
-                                     erm_loss=erm_loss, loss=loss, ensemble_early_stopped=ensemble_early_stopped, last_best_valid_acc=last_best_valid_acc, scheduler=scheduler, stats=stats)
+                logs=eval_val_metrics(m=m,m_idx=m_idx, valid_dl=valid_dl, args=args, itr=itr, epoch=epoch, adv_loss=adv_loss,
+                                     erm_loss=erm_loss, loss=loss, ensemble_early_stopped=ensemble_early_stopped, last_best_valid_acc=last_best_valid_acc, scheduler=scheduler, stats=stats,logs={})
+                wandb.log(logs)
         
         itr = -1
         last_best_valid_acc = -1
@@ -329,12 +340,12 @@ def main(args):
 
     
     exp_name = f"ep={args.epochs}_lrmax={args.lr}_alpha={args.alpha}_dataset={args.dataset}_perturb_type={args.perturb_type}" + \
-               f"_model={args.model}_scheduler={args.scheduler}_seed={args.seed}_opt={args.opt}_ensemble_size={args.ensemble_size}" + \
+               f"_model={args.model}_pretrained={args.pretrained}_scheduler={args.scheduler}_seed={args.seed}_opt={args.opt}_ensemble_size={args.ensemble_size}" + \
                f"_no_diversity={args.no_diversity}_dbat_loss_type={args.dbat_loss_type}_weight_decay={args.l2_reg}_no_nesterov_"
     
 
     log_name= f"alpha={args.alpha}_dbat_loss_type={args.dbat_loss_type}_weight_decay={args.l2_reg}_opt={args.opt}" + \
-               f"_ensemble_size={args.ensemble_size}_dataset={args.dataset}_model={args.model}_epochs={args.epochs}" 
+               f"_ensemble_size={args.ensemble_size}_dataset={args.dataset}_model={args.model}_pretrained={args.pretrained}_epochs={args.epochs}" 
     
     if args.dataset == "cifar-10":
         exp_name=f"{exp_name}_semantic_idx={args.split_semantic_task_idx}_spurious_idx={args.split_spurious_task_idx}"
@@ -365,6 +376,11 @@ def main(args):
 
         ## saving hyperparameters
         wandb.config = vars(args)
+
+        ##defining custom step so that sequentially trained models can be compared on the same axis
+
+        wandb._define_metric("custom_step")
+        wandb._define_metric("train/*", step_metric="custom_step")
 
 
     print(f"\nTraining \n{vars(args)}\n")

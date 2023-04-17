@@ -205,7 +205,6 @@ def get_cifar_10(args):
     ## labelling with semantic task
     semantic_task = CIFARClassificationTask(task_type="real", task_idx=args.split_semantic_task_idx)
     relabel = lambda target: semantic_task(target)
-
     dataset.targets = relabel(dataset.targets)
     test_dataset.targets = relabel(test_dataset.targets)
 
