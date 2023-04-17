@@ -7,7 +7,9 @@ import torchvision
 import torchvision.utils as vision_utils
 from wilds import get_dataset as get_wild_dataset
 from wilds.common.data_loaders import get_train_loader, get_eval_loader
+from cifar_task import CIFARClassificationTask
 
+from torch.utils.data import DataLoader, Dataset, random_split, Subset
 
 class WrappedDataLoader:
     def __init__(self, dl, func):
@@ -179,6 +181,62 @@ def get_camelyon17_v1(args): # ood = test_unlabeled
     return train_dl, valid_dl, test_dl, perturb_dl
 
 
+def get_cifar_10(args):
+
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize(
+        mean=[x / 255.0 for x in [125.3, 123.0, 113.9]],
+        std=[x / 255.0 for x in [63.0, 62.1, 66.7]],
+    )
+    ])
+
+
+    try:
+        dataset = torchvision.datasets.CIFAR10(root="./datasets/", train=True, download=True, transform=transform)
+        test_dataset = torchvision.datasets.CIFAR10(root="./datasets/", train=False, download=True, transform=transform)
+
+    except:
+        dataset = torchvision.datasets.CIFAR10(root="./datasets/", train=True, download=False, transform=transform)
+        test_dataset = torchvision.datasets.CIFAR10(root="./datasets/", train=False, download=False, transform=transform)
+
+
+
+    ## labelling with semantic task
+    semantic_task = CIFARClassificationTask(task_type="real", task_idx=args.split_semantic_task_idx)
+    relabel = lambda target: semantic_task(target)
+
+    dataset.targets = relabel(dataset.targets)
+    test_dataset.targets = relabel(test_dataset.targets)
+
+    ## adversarial-splitting
+
+    group_info = torch.load(args.conditional_labelling_split).bool()
+    splits = torch.load(args.train_val_split)
+    train_split, val_split = splits
+    labeled_train, labeled_val = [group_info[indices] for indices in splits]
+    labeled_train_split, unlabeled_train_split = train_split[labeled_train], train_split[~labeled_train]
+
+    splits = [labeled_train_split, unlabeled_train_split, val_split]
+
+    labeled_dataset_train, unlabeled_dataset_train, dataset_val = [Subset(dataset,indices) for indices in splits]
+
+    dataset_perturbed = unlabeled_dataset_train
+    dataset_train = labeled_dataset_train
+
+    train_dl = DataLoader(dataset_train, batch_size=args.batch_size_train, shuffle=True)
+    valid_dl = DataLoader(dataset_val, batch_size=args.batch_size_eval, shuffle=False)
+    test_dl = DataLoader(test_dataset, batch_size=args.batch_size_eval, shuffle=False)
+    perturb_dl = DataLoader(dataset_perturbed, batch_size=args.batch_size_train, shuffle=True)
+
+
+    train_dl = WrappedDataLoader(train_dl, lambda x, y: (x.to(args.device), y.to(args.device)))
+    valid_dl = WrappedDataLoader(valid_dl, lambda x, y: (x.to(args.device), y.to(args.device)))
+    test_dl = WrappedDataLoader(test_dl, lambda x, y: (x.to(args.device), y.to(args.device)))
+    perturb_dl = WrappedDataLoader(perturb_dl, lambda x, y: (x.to(args.device), y.to(args.device)))
+    
+    return train_dl, valid_dl, test_dl, perturb_dl
+
 def get_dataset(args):
     if args.dataset == 'kaggle-bird':
         if args.perturb_type == 'ood_is_test':
@@ -202,6 +260,11 @@ def get_dataset(args):
             return get_OH_65classes_v1(args)
         if args.perturb_type == 'ood_is_not_test':
             return get_OH_65classes_v2(args)
+        else:
+            NotImplementedError(f"Version of perturbations '{args.perturb_type}' not implemented for dataset '{args.dataset}'.")
+    elif args.dataset == "cifar-10":
+        if args.perturb_type == 'ood_is_test':
+            return get_cifar_10(args)
         else:
             NotImplementedError(f"Version of perturbations '{args.perturb_type}' not implemented for dataset '{args.dataset}'.")
     else:

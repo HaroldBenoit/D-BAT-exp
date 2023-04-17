@@ -9,7 +9,7 @@ def get_model_func(args):
     if args.dataset == 'camelyon17':
         if args.model == 'resnet50':
             def m_f():
-                m = model_zoo.resnet50(pretrained=True)
+                m = model_zoo.resnet50(pretrained=args.pretrained)
                 d = m.fc.in_features
                 m.fc = nn.Linear(d, 2)
                 return m.to(args.device)
@@ -19,7 +19,7 @@ def get_model_func(args):
     elif args.dataset == 'waterbird':
         if args.model == 'resnet50':
             def m_f():
-                m = model_zoo.resnet50(pretrained=True)
+                m = model_zoo.resnet50(pretrained=args.pretrained)
                 d = m.fc.in_features
                 m.fc = nn.Linear(d, 2)
                 return m.to(args.device)
@@ -29,16 +29,33 @@ def get_model_func(args):
     elif args.dataset == 'oh-65cls':
         if args.model == 'resnet18':
             def m_f():
-                m = model_zoo.resnet18(pretrained=True)
+                m = model_zoo.resnet18(pretrained=args.pretrained)
                 d = m.fc.in_features
                 m.fc = nn.Linear(d, 65)
                 return m.to(args.device)
             return m_f
         if args.model == 'resnet50':
             def m_f():
-                m = model_zoo.resnet50(pretrained=True)
+                m = model_zoo.resnet50(pretrained=args.pretrained)
                 d = m.fc.in_features
                 m.fc = nn.Linear(d, 65)
+                return m.to(args.device)
+            return m_f
+        else:
+            raise NotImplementedError(f"Missing implemntation for model '{args.model}'.")
+    elif args.dataset == 'cifar-10':
+        if args.model == 'resnet18':
+            def m_f():
+                m = model_zoo.resnet18(pretrained=args.pretrained)
+                d = m.fc.in_features
+                m.fc = nn.Linear(d, 2)
+                return m.to(args.device)
+            return m_f
+        if args.model == 'resnet50':
+            def m_f():
+                m = model_zoo.resnet50(pretrained=args.pretrained)
+                d = m.fc.in_features
+                m.fc = nn.Linear(d, 2)
                 return m.to(args.device)
             return m_f
         else:
