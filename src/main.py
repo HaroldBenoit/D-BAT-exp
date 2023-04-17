@@ -104,6 +104,9 @@ def get_args():
 def eval_val_metrics(m:nn.Module, m_idx:int, valid_dl:DataLoader, args, itr:int, epoch:int, adv_loss, erm_loss, loss, ensemble_early_stopped, last_best_valid_acc, scheduler, stats, logs):
     m.eval()
     valid_acc = get_acc(m, valid_dl)
+    if args.dataset == "cifar-10":
+        spurious_valid_acc = get_acc(m, valid_dl, spurious=True)
+        logs[f"valid/m{m_idx+1}_spurious_acc"] = spurious_valid_acc
     if not(args.nologger):
         logs[f"valid/m{m_idx+1}_semantic_acc"] = valid_acc
 
@@ -143,6 +146,8 @@ def train(get_model, get_opt, num_models, train_dl, valid_dl, test_dl, perturb_d
     stats['ensemble-test-acc-es'] = None
     stats['ensemble-test-pgd-acc-es'] = None
 
+    ## spurious task labelling
+
     for model in ensemble:
         model.train()
         
@@ -159,8 +164,15 @@ def train(get_model, get_opt, num_models, train_dl, valid_dl, test_dl, perturb_d
 
         
         for epoch in tqdm(range(start_epoch, max_epoch)):
-            for x, y in train_dl:
+            for batch in train_dl:
+                if args.dataset != "cifar-10":
+                    x,y = batch
+                else:
+                    x, y, spurious_y = batch
+
+
                 itr += 1
+
                 ## custom step to be able to compare runs
                 logs = {"custom_step":itr}
 
@@ -171,11 +183,20 @@ def train(get_model, get_opt, num_models, train_dl, valid_dl, test_dl, perturb_d
                 preds= torch.argmax(out, dim=1) 
                 train_acc = (preds == y)
                 train_acc = torch.sum(train_acc)/len(train_acc)
+                if args.dataset == "cifar-10":
+                    spurious_train_acc = (preds == spurious_y)
+                    spurious_train_acc = torch.sum(spurious_train_acc)/len(spurious_train_acc)
+
                 train_rate = (preds == 1)
                 train_rate = torch.sum(train_rate)/len(train_rate)
 
                 if not(args.nologger):
-                    train_logs = {f"train/m{m_idx+1}_semantic_acc":train_acc.item(), f"train/m{m_idx+1}_rate":train_rate.item(), f"train/m{m_idx+1}_probs": wandb.Histogram(out.flatten().detach().cpu().numpy())}
+                    train_logs = {f"train/m{m_idx+1}_semantic_acc":train_acc.item(), 
+                                  f"train/m{m_idx+1}_rate":train_rate.item(), 
+                                  f"train/m{m_idx+1}_probs": wandb.Histogram(out.flatten().detach().cpu().numpy())}
+                    
+                    if args.dataset == "cifar-10":
+                        train_logs[f"train/m{m_idx+1}_spurious_acc"] = spurious_train_acc.item()
                     logs = {**logs, **train_logs}
 
                 erm_loss = F.cross_entropy(logits, y)
@@ -253,24 +274,33 @@ def train(get_model, get_opt, num_models, train_dl, valid_dl, test_dl, perturb_d
             if epoch == (max_epoch -1):
                 logs=eval_val_metrics(m=m,m_idx=m_idx, valid_dl=valid_dl, args=args, itr=itr, epoch=epoch, adv_loss=adv_loss,
                                      erm_loss=erm_loss, loss=loss, ensemble_early_stopped=ensemble_early_stopped, last_best_valid_acc=last_best_valid_acc, scheduler=scheduler, stats=stats,logs={})
-                wandb.log(logs)
+                if not(args.nologger):
+                    wandb.log(logs)
         
         itr = -1
         last_best_valid_acc = -1
-        
+    
+    ## TESTING
+
+    logs={}
+
     stats['test-acc'] = []
     for i, model in enumerate(ensemble): # test acc for each predictor in ensemble
         model.eval()  
         test_acc = get_acc(model, test_dl)
         if not(args.nologger):
-            wandb.log({f"test/m{i+1}_semantic_acc": test_acc})     
+            logs[f"test/m{i+1}_semantic_acc"] = test_acc
+
+        if args.dataset == "cifar-10":
+            spurious_test_acc = get_acc(model, test_dl, spurious=True)
+            logs[f"test/m{i+1}_spurious_acc"] = spurious_test_acc      
 
         stats['test-acc'].append(test_acc)
         print(f"[test m{i+1}] test-acc: {test_acc:.3f}")
         
     test_acc_ensemble = get_acc_ensemble(ensemble, test_dl)
     if not(args.nologger):
-        wandb.log({f"test/ensemble_semantic_acc": test_acc_ensemble})
+        logs[f"test/ensemble_semantic_acc"] = test_acc_ensemble
 
     stats['ensemble-test-acc'] = test_acc_ensemble
     print(f"[test (last iterates ensemble)] test-acc: {test_acc_ensemble:.3f}") 
@@ -289,7 +319,10 @@ def train(get_model, get_opt, num_models, train_dl, valid_dl, test_dl, perturb_d
     print(sim_table)
 
     if not(args.nologger):
-        wandb.log({"test/similarity_heatmap":heatmap_fig(sim_table)})
+        logs["test/similarity_heatmap"] = heatmap_fig(sim_table)
+
+    if not(args.nologger):
+        wandb.log(logs)
 
 
     return stats

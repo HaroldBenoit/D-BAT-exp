@@ -19,10 +19,15 @@ def dl_to_sampler(dl):
 
 
 @torch.no_grad()
-def get_acc(model, dl):
+def get_acc(model, dl, spurious=False):
     assert model.training == False
     acc = []
-    for X, y in dl:
+    for batch in dl:
+        if spurious:
+            X, y, spurious_y = batch
+            y=spurious_y
+        else:
+            X, y, _ = batch
         acc.append(torch.argmax(model(X), dim=1) == y)
     acc = torch.cat(acc)
     acc = torch.sum(acc)/len(acc)
@@ -33,7 +38,7 @@ def get_acc(model, dl):
 def get_acc_ensemble(ensemble, dl):
     assert all(model.training == False for model in ensemble)
     acc = []
-    for X, y in dl:
+    for X, y, _ in dl:
         outs = [torch.softmax(model(X), dim=1) for model in ensemble]
         outs = torch.stack(outs, dim=0).mean(dim=0)
         acc.append(torch.argmax(outs, dim=1) == y)
@@ -58,7 +63,7 @@ def get_ensemble_similarity(ensemble, dl):
     pairwise_indexes = list(combinations(range(num_models),2))
     sims = defaultdict(list)
 
-    for X,y in dl:
+    for X,y,_ in dl:
         outs = []
         for model in ensemble:
             out = torch.softmax(model(X), dim=1) ## B*n_classes

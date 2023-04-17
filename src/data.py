@@ -8,7 +8,7 @@ import torchvision.utils as vision_utils
 from wilds import get_dataset as get_wild_dataset
 from wilds.common.data_loaders import get_train_loader, get_eval_loader
 from cifar_task import CIFARClassificationTask
-
+import pandas as pd
 from torch.utils.data import DataLoader, Dataset, random_split, Subset
 
 class WrappedDataLoader:
@@ -181,6 +181,26 @@ def get_camelyon17_v1(args): # ood = test_unlabeled
     return train_dl, valid_dl, test_dl, perturb_dl
 
 
+
+def CIFAR_with_spurious(cls, args):
+    """
+    Modifies the given Dataset class to return a tuple data, target, index
+    instead of just data, target.
+    """
+
+    spurious_labelling = pd.read_csv(args.discovered_tasks_path)[f"resnet18_d8-{args.split_spurious_task_idx}"].to_numpy()
+    spurious_labelling = 1 - spurious_labelling
+
+    def __getitem__(self, index):
+        data, target = cls.__getitem__(self, index)
+        return data, target, spurious_labelling[index]
+
+    return type(cls.__name__, (cls,), {
+        '__getitem__': __getitem__,
+    })
+
+
+
 def get_cifar_10(args):
 
     transform = transforms.Compose([
@@ -191,14 +211,15 @@ def get_cifar_10(args):
     )
     ])
 
+    CIFAR10WithIndicies = CIFAR_with_spurious(torchvision.datasets.CIFAR10, args)
 
     try:
-        dataset = torchvision.datasets.CIFAR10(root="./datasets/", train=True, download=True, transform=transform)
-        test_dataset = torchvision.datasets.CIFAR10(root="./datasets/", train=False, download=True, transform=transform)
+        dataset = CIFAR10WithIndicies(root="./datasets/", train=True, download=True, transform=transform)
+        test_dataset = CIFAR10WithIndicies(root="./datasets/", train=False, download=True, transform=transform)
 
     except:
-        dataset = torchvision.datasets.CIFAR10(root="./datasets/", train=True, download=False, transform=transform)
-        test_dataset = torchvision.datasets.CIFAR10(root="./datasets/", train=False, download=False, transform=transform)
+        dataset = CIFAR10WithIndicies(root="./datasets/", train=True, download=False, transform=transform)
+        test_dataset = CIFAR10WithIndicies(root="./datasets/", train=False, download=False, transform=transform)
 
 
 
@@ -229,10 +250,10 @@ def get_cifar_10(args):
     perturb_dl = DataLoader(dataset_perturbed, batch_size=args.batch_size_train, shuffle=True)
 
 
-    train_dl = WrappedDataLoader(train_dl, lambda x, y: (x.to(args.device), y.to(args.device)))
-    valid_dl = WrappedDataLoader(valid_dl, lambda x, y: (x.to(args.device), y.to(args.device)))
-    test_dl = WrappedDataLoader(test_dl, lambda x, y: (x.to(args.device), y.to(args.device)))
-    perturb_dl = WrappedDataLoader(perturb_dl, lambda x, y: (x.to(args.device), y.to(args.device)))
+    train_dl = WrappedDataLoader(train_dl, lambda x, y, idx: (x.to(args.device), y.to(args.device), idx.to(args.device)))
+    valid_dl = WrappedDataLoader(valid_dl, lambda x, y, idx: (x.to(args.device), y.to(args.device), idx.to(args.device)))
+    test_dl = WrappedDataLoader(test_dl, lambda x, y, idx: (x.to(args.device), y.to(args.device), idx.to(args.device)))
+    perturb_dl = WrappedDataLoader(perturb_dl, lambda x, y, idx: (x.to(args.device), y.to(args.device), idx.to(args.device)))
     
     return train_dl, valid_dl, test_dl, perturb_dl
 

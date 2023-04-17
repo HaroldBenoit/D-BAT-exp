@@ -2,7 +2,7 @@ conditional_labelling_split_folder: "/datasets/home/hbenoit/label-cond-as/"
 conditional_labelling_split_name_format: "s_{split_semantic_task_idx}_d_{split_spurious_task_idx}_conditional_labelling_split_0.5.torch"
 train_val_split_folder: "/datasets/home/hbenoit/label-cond-as/"
 train_val_split_name_format: "s_{split_semantic_task_idx}_d_{split_spurious_task_idx}_train_val_split_0.5.torch"
-discovered_tasks_path: "adversarial-splits/assets/tasks/discovered.csv"
+discovered_tasks_path: "/datasets/home/hbenoit/adversarial-splits/assets/tasks/discovered.csv"
 
 
 
