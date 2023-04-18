@@ -199,7 +199,16 @@ def CIFAR_with_spurious(cls, args):
         '__getitem__': __getitem__,
     })
 
+def WrappedDataLoaderNew(cls, func):
 
+    def __iter__(self):
+        batches = cls.__iter__(self)
+        for b in batches:
+            yield (func(*b))
+
+    return type(cls.__name__, (cls,), {
+        '__iter__': __iter__,
+    })
 
 def get_cifar_10(args):
 
@@ -244,12 +253,14 @@ def get_cifar_10(args):
     dataset_perturbed = unlabeled_dataset_train
     dataset_train = labeled_dataset_train
 
-    train_dl = DataLoader(dataset_train, batch_size=args.batch_size_train, shuffle=True)
-    valid_dl = DataLoader(dataset_val, batch_size=args.batch_size_eval, shuffle=False)
-    test_dl = DataLoader(test_dataset, batch_size=args.batch_size_eval, shuffle=False)
-    perturb_dl = DataLoader(dataset_perturbed, batch_size=args.batch_size_train, shuffle=True)
+    #DataLoaderNew = WrappedDataLoaderNew(DataLoader, lambda x, y, idx: (x.to(args.device), y.to(args.device), idx.to(args.device)))
 
+    train_dl = DataLoader(dataset_train, batch_size=args.batch_size_train, num_workers=8, shuffle=True)
+    valid_dl = DataLoader(dataset_val, batch_size=args.batch_size_eval, num_workers=5, shuffle=False)
+    test_dl = DataLoader(test_dataset, batch_size=args.batch_size_eval, num_workers=5, shuffle=False)
+    perturb_dl = DataLoader(dataset_perturbed, batch_size=args.batch_size_train, num_workers=8, shuffle=True)
 
+#
     train_dl = WrappedDataLoader(train_dl, lambda x, y, idx: (x.to(args.device), y.to(args.device), idx.to(args.device)))
     valid_dl = WrappedDataLoader(valid_dl, lambda x, y, idx: (x.to(args.device), y.to(args.device), idx.to(args.device)))
     test_dl = WrappedDataLoader(test_dl, lambda x, y, idx: (x.to(args.device), y.to(args.device), idx.to(args.device)))

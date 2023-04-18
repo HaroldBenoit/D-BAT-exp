@@ -19,26 +19,31 @@ def dl_to_sampler(dl):
 
 
 @torch.no_grad()
-def get_acc(model, dl, spurious=False):
+def get_acc(model, dl):
     assert model.training == False
     acc = []
-    for batch in dl:
-        if spurious:
-            X, y, spurious_y = batch
-            y=spurious_y
-        else:
-            X, y, _ = batch
-        acc.append(torch.argmax(model(X), dim=1) == y)
+    spurious_acc = []
+    for X, y, *spurious_y in dl:
+        preds = torch.argmax(model(X), dim=1)
+        acc.append( preds == y)
+        if spurious_y != []:
+            spurious_acc.append(preds == spurious_y[0])
     acc = torch.cat(acc)
     acc = torch.sum(acc)/len(acc)
-    return acc.item()
+
+    if len(spurious_acc) != 0:
+        spurious_acc = torch.cat(spurious_acc).flatten()
+        spurious_acc = torch.sum(spurious_acc)/len(spurious_acc)
+        return acc.item(), spurious_acc.item()
+
+    return acc.item(), 
 
 
 @torch.no_grad()
 def get_acc_ensemble(ensemble, dl):
     assert all(model.training == False for model in ensemble)
     acc = []
-    for X, y, _ in dl:
+    for X, y, *spurious_y in dl:
         outs = [torch.softmax(model(X), dim=1) for model in ensemble]
         outs = torch.stack(outs, dim=0).mean(dim=0)
         acc.append(torch.argmax(outs, dim=1) == y)
@@ -56,14 +61,44 @@ def heatmap_fig(s, vmin=0.5, vmax=0.7):
 
 
 @torch.no_grad()
-def get_ensemble_similarity(ensemble, dl):
+def get_batchwise_ensemble_similarity_logs(ensemble, x_tilde):
+    preds = []
+
+    for model in ensemble:
+        model.eval()
+        out = torch.softmax(model(x_tilde), dim=1) ## B*n_classes
+        pred = torch.argmax(out, dim=1)  ## B*1
+        preds.append(pred)
+
+    logs = {}
+
+    sims= []
+    pairwise_indexes = list(combinations(range(len(ensemble)),2))
+    for idx1, idx2 in pairwise_indexes:
+        similarity = (preds[idx1] == preds[idx2]).float().cpu().mean()
+        sims.append(similarity)
+
+    sims = np.array(sims)
+    logs[f"unlabeled/similarity_mean_{len(ensemble)}"] = sims.mean()
+    logs[f"unlabeled/similarity_min_{len(ensemble)}"] = sims.min()
+    logs[f"unlabeled/similarity_max_{len(ensemble)}"] = sims.max()
+
+    for model in ensemble:
+        model.train()
+
+    return logs
+
+@torch.no_grad()
+def get_ensemble_similarity(ensemble, dl, num_trained_models):
+    for model in ensemble:
+        model.eval()
     assert all(model.training == False for model in ensemble)
 
     num_models=len(ensemble)
-    pairwise_indexes = list(combinations(range(num_models),2))
+    pairwise_indexes = list(combinations(range(num_trained_models),2))
     sims = defaultdict(list)
 
-    for X,y,_ in dl:
+    for X,y,*spurious_y in dl:
         outs = []
         for model in ensemble:
             out = torch.softmax(model(X), dim=1) ## B*n_classes
@@ -79,6 +114,9 @@ def get_ensemble_similarity(ensemble, dl):
         sim_table[idx1,idx2] = np.array(sims[(idx1,idx2)]).mean()
         ## for symmetry
         sim_table[idx2, idx1] = sim_table[idx1,idx2]
+
+    for model in ensemble:
+        model.train()
 
     return sim_table
 

@@ -24,6 +24,13 @@ def get_model_func(args):
                 m.fc = nn.Linear(d, 2)
                 return m.to(args.device)
             return m_f
+        elif args.model == 'resnet18':
+            def m_f():
+                m = model_zoo.resnet18(pretrained=args.pretrained)
+                d = m.fc.in_features
+                m.fc = nn.Linear(d, 2)
+                return m.to(args.device)
+            return m_f
         else:
             raise NotImplementedError(f"Missing implemntation for model '{args.model}'.")
     elif args.dataset == 'oh-65cls':
