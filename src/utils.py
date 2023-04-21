@@ -52,7 +52,7 @@ def get_acc_ensemble(ensemble, dl):
     return acc.item()
 
 
-def heatmap_fig(s, vmin=0.5, vmax=0.7):
+def heatmap_fig(s, vmin=0.0, vmax=1.0):
     fig = plt.figure()
     plt.imshow(s, cmap='coolwarm', vmin=vmin, vmax=vmax)
     plt.colorbar()

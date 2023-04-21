@@ -16,7 +16,7 @@
 #
 #    done 
 
-for alpha in 1.0 10 
+for alpha in 1.0
     do 
         for epochs in 200 600
             do
