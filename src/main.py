@@ -47,7 +47,8 @@ def get_args():
     parser.add_argument('--no_diversity', action='store_true')
     parser.add_argument('--dbat_loss_type', default='v1', choices=['v1', 'v2'])
     parser.add_argument('--perturb_type', default='ood_is_test', choices=['ood_is_test', 'ood_is_not_test'])
-    parser.add_argument('--alpha', default=1.0, type=float)    
+    parser.add_argument('--alpha', default=1.0, type=float)
+    parser.add_argument('--majority_only', default=False, action="store_true") ## whether the training data spurious feature is completely correlated with semantic    
     # Dataset and model
     parser.add_argument('--model', default='resnet50', choices=['resnet18', 'resnet50'])
     parser.add_argument('--dataset', default='camelyon17', choices=['waterbird', 'camelyon17', 'oh-65cls', 'cifar-10'])
@@ -178,6 +179,7 @@ def train(get_model, get_opt, num_models, train_dl, valid_dl, test_dl, perturb_d
 
                 ## custom step to be able to compare runs (IMPORTANT)
                 logs = {"custom_step":itr}
+                logs["epoch"] = epoch
 
                 x_tilde = perturb_sampler()[0]
                 with torch.no_grad():
@@ -392,11 +394,11 @@ def main(args):
     
     exp_name = f"ep={args.epochs}_lrmax={args.lr}_alpha={args.alpha}_dataset={args.dataset}_perturb_type={args.perturb_type}" + \
                f"_model={args.model}_pretrained={args.pretrained}_scheduler={args.scheduler}_seed={args.seed}_opt={args.opt}_ensemble_size={args.ensemble_size}" + \
-               f"_no_diversity={args.no_diversity}_dbat_loss_type={args.dbat_loss_type}_weight_decay={args.l2_reg}_no_nesterov_"
+               f"_no_diversity={args.no_diversity}_dbat_loss_type={args.dbat_loss_type}_weight_decay={args.l2_reg}_no_nesterov_majority_only={args.majority_only}"
     
 
-    log_name= f"alpha={args.alpha}_dbat_loss_type={args.dbat_loss_type}_weight_decay={args.l2_reg}_opt={args.opt}" + \
-               f"_ensemble_size={args.ensemble_size}_dataset={args.dataset}_model={args.model}_pretrained={args.pretrained}_epochs={args.epochs}" 
+    log_name= f"alpha={args.alpha}_dbat_loss_type={args.dbat_loss_type}_opt={args.opt}" + \
+               f"_ensemble_size={args.ensemble_size}_dataset={args.dataset}_majority_only={args.majority_only}model={args.model}_pretrained={args.pretrained}_epochs={args.epochs}" 
     
     if args.dataset == "cifar-10":
         exp_name=f"{exp_name}_semantic_idx={args.split_semantic_task_idx}_spurious_idx={args.split_spurious_task_idx}"

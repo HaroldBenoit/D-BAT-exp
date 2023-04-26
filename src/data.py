@@ -7,6 +7,7 @@ import torchvision
 import torchvision.utils as vision_utils
 from wilds import get_dataset as get_wild_dataset
 from wilds.common.data_loaders import get_train_loader, get_eval_loader
+from wilds.datasets.waterbirds_dataset import WaterbirdsDataset
 from cifar_task import CIFARClassificationTask
 import pandas as pd
 from torch.utils.data import DataLoader, Dataset, random_split, Subset
@@ -92,7 +93,21 @@ def get_OH_65classes_v2(args):
     perturb_dl = DataLoader(data_perturb, batch_size=args.batch_size_train, shuffle=True)
     
     return train_dl, valid_dl, test_dl, perturb_dl
-    
+
+def majority_only_waterbirds_dataset(dataset:WaterbirdsDataset) -> WaterbirdsDataset:
+    train_split_mask = dataset.split_array == dataset.split_dict["train"]
+    train_split_idx = np.where(train_split_mask)[0]
+
+    train_metadata_array = dataset.metadata_array[train_split_mask,:]
+
+    #(train_metadata_array[:,0].numpy() == train_metadata_array[:,1].numpy()).mean()
+    spurious = (train_metadata_array[:,0].numpy() == train_metadata_array[:,1].numpy())
+
+    non_spurious_train_split_idx = train_split_idx[~spurious]
+    ## little cheat to make the non_spurious train data points not attached to any split (train,val, test)
+    dataset.split_array[non_spurious_train_split_idx] = -1
+
+    return dataset
 
 def get_waterbird_v1(args): # confounder_strength = 0.95
     scale = 256.0/224.0
@@ -107,6 +122,9 @@ def get_waterbird_v1(args): # confounder_strength = 0.95
     except:
         dataset = get_wild_dataset(dataset="waterbirds", download=True, root_dir="./datasets")
     
+    if args.majority_only:
+        dataset = majority_only_waterbirds_dataset(dataset=dataset)
+
     data_train = dataset.get_subset("train", transform=transform_test)
     data_test  = dataset.get_subset("test", transform=transform_test)
     data_valid = dataset.get_subset("val", transform=transform_test)
@@ -137,7 +155,10 @@ def get_camelyon17_v2(args): # ood = val_unlabeled
     data_train = dataset.get_subset("train", transform=transform)
     data_test  = dataset.get_subset("test", transform=transform)
     data_valid = dataset.get_subset("val", transform=transform)
-    data_perturb = get_wild_dataset(dataset="camelyon17", download=False, unlabeled=True, root_dir="./datasets/")
+    try:
+        data_perturb = get_wild_dataset(dataset="camelyon17", download=False, unlabeled=True, root_dir="./datasets/")
+    except:
+        data_perturb = get_wild_dataset(dataset="camelyon17", download=True, unlabeled=True, root_dir="./datasets/")
     data_perturb = data_perturb.get_subset("val_unlabeled", transform=transform) # train_unlabeled, val_unlabeled, test_unlabeled
     
     train_dl = get_train_loader("standard", data_train, batch_size=args.batch_size_train, num_workers=8, pin_memory=True)
@@ -165,7 +186,10 @@ def get_camelyon17_v1(args): # ood = test_unlabeled
     data_train = dataset.get_subset("train", transform=transform)
     data_test  = dataset.get_subset("test", transform=transform)
     data_valid = dataset.get_subset("val", transform=transform)
-    data_perturb = get_wild_dataset(dataset="camelyon17", download=False, unlabeled=True, root_dir="./datasets/")
+    try:
+        data_perturb = get_wild_dataset(dataset="camelyon17", download=False, unlabeled=True, root_dir="./datasets/")
+    except:
+        data_perturb = get_wild_dataset(dataset="camelyon17", download=True, unlabeled=True, root_dir="./datasets/")
     data_perturb = data_perturb.get_subset("test_unlabeled", transform=transform) # train_unlabeled, val_unlabeled, test_unlabeled
     
     train_dl = get_train_loader("standard", data_train, batch_size=args.batch_size_train, num_workers=8, pin_memory=True)
