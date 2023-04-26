@@ -5,6 +5,27 @@ from itertools import combinations
 from collections import defaultdict
 import matplotlib.pyplot as plt
 
+def collate_list(vec):
+    """
+    If vec is a list of Tensors, it concatenates them all along the first dimension.
+
+    If vec is a list of lists, it joins these lists together, but does not attempt to
+    recursively collate. This allows each element of the list to be, e.g., its own dict.
+
+    If vec is a list of dicts (with the same keys in each dict), it returns a single dict
+    with the same keys. For each key, it recursively collates all entries in the list.
+    """
+    if not isinstance(vec, list):
+        raise TypeError("collate_list must take in a list")
+    elem = vec[0]
+    if torch.is_tensor(elem):
+        return torch.cat(vec)
+    elif isinstance(elem, list):
+        return [obj for sublist in vec for obj in sublist]
+    elif isinstance(elem, dict):
+        return {k: collate_list([d[k] for d in vec]) for k in elem}
+    else:
+        raise TypeError("Elements of the list to collate must be tensors or dicts.")
 
 def dl_to_sampler(dl):
     dl_iter = iter(dl)
@@ -19,37 +40,56 @@ def dl_to_sampler(dl):
 
 
 @torch.no_grad()
-def get_acc(model, dl):
+def get_acc(model, dl, return_logits=False):
     assert model.training == False
     acc = []
     spurious_acc = []
-    for X, y, *spurious_y in dl:
-        preds = torch.argmax(model(X), dim=1)
+    logits_list=[]
+    for batch in dl:
+        X = batch["x"]
+        y = batch["y"]
+        logits= model(X)
+        if return_logits:
+            logits_list.append(logits.tolist())
+        preds = torch.argmax(logits, dim=1)
         acc.append( preds == y)
-        if spurious_y != []:
-            spurious_acc.append(preds == spurious_y[0])
+        if "spurious_y" in batch:
+            spurious_acc.append(preds == batch["spurious_y"])
     acc = torch.cat(acc)
     acc = torch.sum(acc)/len(acc)
+
+    res = {"acc": acc.item()}
 
     if len(spurious_acc) != 0:
         spurious_acc = torch.cat(spurious_acc).flatten()
         spurious_acc = torch.sum(spurious_acc)/len(spurious_acc)
-        return acc.item(), spurious_acc.item()
+        res["spurious_acc"] = spurious_acc.item()
 
-    return acc.item(), 
+    if return_logits:
+        res["logits_list"] = logits_list
+
+    return res
 
 
 @torch.no_grad()
-def get_acc_ensemble(ensemble, dl):
+def get_acc_ensemble(ensemble, dl, return_meta=False):
     assert all(model.training == False for model in ensemble)
     acc = []
-    for X, y, *spurious_y in dl:
+    metas=[]
+    for batch in dl:
+        X = batch["x"]
+        y = batch["y"]
+        if return_meta and "meta" in batch:
+            metas.append(batch["meta"].tolist())
         outs = [torch.softmax(model(X), dim=1) for model in ensemble]
         outs = torch.stack(outs, dim=0).mean(dim=0)
         acc.append(torch.argmax(outs, dim=1) == y)
     acc = torch.cat(acc)
     acc = torch.sum(acc)/len(acc)
-    return acc.item()
+    res = {"acc": acc.item()}
+    if return_meta:
+        res["metas"] = metas
+    return res
 
 
 def heatmap_fig(s, vmin=0.0, vmax=1.0):
@@ -98,7 +138,8 @@ def get_ensemble_similarity(ensemble, dl, num_trained_models):
     pairwise_indexes = list(combinations(range(num_trained_models),2))
     sims = defaultdict(list)
 
-    for X,y,*spurious_y in dl:
+    for batch in dl:
+        X = batch["x"]
         outs = []
         for model in ensemble:
             out = torch.softmax(model(X), dim=1) ## B*n_classes

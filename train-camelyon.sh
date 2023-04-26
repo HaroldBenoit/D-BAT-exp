@@ -1,16 +1,28 @@
-# ERM
-python ./src/main.py --ensemble_size 2 --batch_size_train 128 --batch_size_eval 512 --seed 0 --epochs 60 --lr 0.001 --opt sgd --scheduler none --alpha 0.0 --model resnet50 --dataset camelyon17 --eval_freq 5000 --l2_reg 0.0001 --no_diversity
-python ./src/main.py --ensemble_size 2 --batch_size_train 128 --batch_size_eval 512 --seed 1 --epochs 60 --lr 0.001 --opt sgd --scheduler none --alpha 0.0 --model resnet50 --dataset camelyon17 --eval_freq 5000 --l2_reg 0.0001 --no_diversity
-python ./src/main.py --ensemble_size 2 --batch_size_train 128 --batch_size_eval 512 --seed 2 --epochs 60 --lr 0.001 --opt sgd --scheduler none --alpha 0.0 --model resnet50 --dataset camelyon17 --eval_freq 5000 --l2_reg 0.0001 --no_diversity
+
+
+# one of each first
+
+# DBAT: D_ood = D_test
+python ./src/main.py --config ./camelyon17_paper.yml --seed 0 --alpha 0.000001 --perturb_type ood_is_test --results_base_folder results_reproduction 
+# DBAT: D_ood != D_test
+python ./src/main.py --config ./camelyon17_paper.yml --seed 0 --alpha 0.000001 --perturb_type ood_is_not_test --results_base_folder results_reproduction
+
+#ERM
+python ./src/main.py --config ./camelyon17_paper.yml --seed 0  --no_diversity --alpha 0.0  --results_base_folder results_reproduction
+
+
+
 
 
 # DBAT: D_ood = D_test
-python ./src/main.py --ensemble_size 2 --batch_size_train 128 --batch_size_eval 512 --seed 0 --epochs 60 --lr 0.001 --opt sgd --scheduler none --alpha 0.000001 --perturb_type ood_is_test --model resnet50 --dataset camelyon17 --eval_freq 5000 --l2_reg 0.0001
-python ./src/main.py --ensemble_size 2 --batch_size_train 128 --batch_size_eval 512 --seed 1 --epochs 60 --lr 0.001 --opt sgd --scheduler none --alpha 0.000001 --perturb_type ood_is_test --model resnet50 --dataset camelyon17 --eval_freq 5000 --l2_reg 0.0001
-python ./src/main.py --ensemble_size 2 --batch_size_train 128 --batch_size_eval 512 --seed 2 --epochs 60 --lr 0.001 --opt sgd --scheduler none --alpha 0.000001 --perturb_type ood_is_test --model resnet50 --dataset camelyon17 --eval_freq 5000 --l2_reg 0.0001
+python ./src/main.py --config ./camelyon17_paper.yml --seed 1 --alpha 0.000001 --perturb_type ood_is_test --results_base_folder results_reproduction
+python ./src/main.py --config ./camelyon17_paper.yml --seed 2 --alpha 0.000001 --perturb_type ood_is_test --results_base_folder results_reproduction
 
 
 # DBAT: D_ood != D_test
-python ./src/main.py --ensemble_size 2 --batch_size_train 128 --batch_size_eval 512 --seed 0 --epochs 60 --lr 0.001 --opt sgd --scheduler none --alpha 0.000001 --perturb_type ood_is_not_test --model resnet50 --dataset camelyon17 --eval_freq 5000 --l2_reg 0.0001
-python ./src/main.py --ensemble_size 2 --batch_size_train 128 --batch_size_eval 512 --seed 1 --epochs 60 --lr 0.001 --opt sgd --scheduler none --alpha 0.000001 --perturb_type ood_is_not_test --model resnet50 --dataset camelyon17 --eval_freq 5000 --l2_reg 0.0001
-python ./src/main.py --ensemble_size 2 --batch_size_train 128 --batch_size_eval 512 --seed 2 --epochs 60 --lr 0.001 --opt sgd --scheduler none --alpha 0.000001 --perturb_type ood_is_not_test --model resnet50 --dataset camelyon17 --eval_freq 5000 --l2_reg 0.0001
+python ./src/main.py --config ./camelyon17_paper.yml --seed 1 --alpha 0.000001 --perturb_type ood_is_not_test --results_base_folder results_reproduction
+python ./src/main.py --config ./camelyon17_paper.yml --seed 2 --alpha 0.000001 --perturb_type ood_is_not_test --results_base_folder results_reproduction
+
+# ERM
+python ./src/main.py --config ./camelyon17_paper.yml --seed 1  --no_diversity --alpha 0.0  --results_base_folder results_reproduction
+python ./src/main.py --config ./camelyon17_paper.yml --seed 2  --no_diversity --alpha 0.0  --results_base_folder results_reproduction

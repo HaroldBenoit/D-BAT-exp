@@ -1,0 +1,19 @@
+##wandb
+
+group: "Camelyon17_reproduction"
+
+##training
+ensemble_size: 2 
+batch_size_train: 128 
+batch_size_eval: 512 
+epochs: 60 
+lr: 0.001 
+opt: "sgd" 
+scheduler: "none" 
+model: "resnet50" 
+dataset: "camelyon17" 
+eval_freq: 5000 
+l2_reg: 0.0001
+
+##important
+pretrained: True

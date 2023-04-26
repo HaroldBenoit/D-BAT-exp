@@ -62,7 +62,7 @@ def get_args():
     
     parser.add_argument('--train_val_split_folder',type=str)
     parser.add_argument('--train_val_split_name_format',type=str)
-    parser.add_argument('--discovered_tasks_path', type=str, help="path to the csv file containing the discovered tasks", default="../assets/tasks/discovered.csv")
+    parser.add_argument('--discovered_tasks_path', type=str, help="path to the csv file containing the discovered tasks", default=None)
 
     parser.add_argument('--pretrained', action="store_true", default=False)
 
@@ -106,11 +106,11 @@ def eval_val_metrics(m:nn.Module, m_idx:int, valid_dl:DataLoader, args, itr:int,
     m.eval()
 
 
-    valid_acc, *spurious_valid_acc = get_acc(m, valid_dl)
-
+    acc_results = get_acc(m, valid_dl)
+    valid_acc = acc_results["acc"]
     logs[f"valid/m{m_idx+1}_semantic_acc"] = valid_acc
-    if spurious_valid_acc != []:
-        logs[f"valid/m{m_idx+1}_spurious_acc"] = spurious_valid_acc[0]
+    if "spurious_acc" in acc_results:
+        logs[f"valid/m{m_idx+1}_spurious_acc"] = acc_results["spurious_acc"]
 
 
     ## pairwise similarities
@@ -173,7 +173,9 @@ def train(get_model, get_opt, num_models, train_dl, valid_dl, test_dl, perturb_d
 
         
         for epoch in tqdm(range(start_epoch, max_epoch)):
-            for x,y, *spurious_y in train_dl:
+            for batch in train_dl:
+                x = batch["x"]
+                y = batch["y"]
 
                 itr += 1
 
@@ -181,7 +183,7 @@ def train(get_model, get_opt, num_models, train_dl, valid_dl, test_dl, perturb_d
                 logs = {"custom_step":itr}
                 logs["epoch"] = epoch
 
-                x_tilde = perturb_sampler()[0]
+                x_tilde = perturb_sampler()["x"]
                 with torch.no_grad():
                     ## computing the rate of the model on unlabeled data
                     unlabeled_logits = m(x_tilde)
@@ -211,8 +213,8 @@ def train(get_model, get_opt, num_models, train_dl, valid_dl, test_dl, perturb_d
                                   f"train/m{m_idx+1}_rate":train_rate.item(), 
                                   f"train/m{m_idx+1}_probs": wandb.Histogram(out.flatten().detach().cpu().numpy())}
                     
-                if spurious_y != []:
-                    spurious_train_acc = (preds == spurious_y[0])
+                if "spurious_y" in batch:
+                    spurious_train_acc = (preds == batch["spurious_y"])
                     spurious_train_acc = torch.sum(spurious_train_acc)/len(spurious_train_acc)
                     train_logs[f"train/m{m_idx+1}_spurious_acc"] = spurious_train_acc.item()
 
@@ -306,19 +308,31 @@ def train(get_model, get_opt, num_models, train_dl, valid_dl, test_dl, perturb_d
     logs={}
 
     stats['test-acc'] = []
+    stats["spurious-test-acc"] = []
+    stats["test-logits"] = []
     for i, model in enumerate(ensemble): # test acc for each predictor in ensemble
         model.eval()  
-        test_acc, *spurious_test_acc = get_acc(model, test_dl)
-    
+        acc_results = get_acc(model, test_dl, return_logits=True)
+        stats["test-logits"].append(acc_results["logits_list"])
+        test_acc= acc_results["acc"]
         logs[f"test/m{i+1}_semantic_acc"] = test_acc
-        if spurious_test_acc != [] :
-            logs[f"test/m{i+1}_spurious_acc"] = spurious_test_acc[0]     
+
+        if "spurious_acc" in acc_results :
+            spurious_test_acc = acc_results["spurious_acc"]
+            logs[f"test/m{i+1}_spurious_acc"] = spurious_test_acc
+            stats["spurious-test-acc"].append(spurious_test_acc)
 
         stats['test-acc'].append(test_acc)
         print(f"[test m{i+1}] test-acc: {test_acc:.3f}")
         
-    test_acc_ensemble = get_acc_ensemble(ensemble, test_dl)
+    test_acc_ensemble_res = get_acc_ensemble(ensemble, test_dl, return_meta=True)
 
+    ## log metadata if available
+    if "metas" in test_acc_ensemble_res:
+        stats["test-metas"] = test_acc_ensemble_res["metas"]
+
+
+    test_acc_ensemble = test_acc_ensemble_res["acc"]
     logs[f"test/ensemble_semantic_acc"] = test_acc_ensemble
 
     stats['ensemble-test-acc'] = test_acc_ensemble
@@ -334,11 +348,13 @@ def train(get_model, get_opt, num_models, train_dl, valid_dl, test_dl, perturb_d
 
     ## pairwise similarities
     sim_table = get_ensemble_similarity(ensemble=ensemble, dl=test_dl, num_trained_models=len(ensemble))
+    stats["test_similarity"] = sim_table.tolist()
     logs["test/similarity_heatmap"] = heatmap_fig(sim_table)
 
     ## UNLABELED SIMILARTIY
 
     sim_table = get_ensemble_similarity(ensemble=ensemble, dl=perturb_dl, num_trained_models=len(ensemble))
+    stats["unlabeled_final_similarty"] = sim_table.tolist()
     logs["unlabeled/final_similarity_heatmap"] = heatmap_fig(sim_table)
 
     if not(args.nologger):
@@ -397,15 +413,15 @@ def main(args):
                f"_no_diversity={args.no_diversity}_dbat_loss_type={args.dbat_loss_type}_weight_decay={args.l2_reg}_no_nesterov_majority_only={args.majority_only}"
     
 
-    log_name= f"alpha={args.alpha}_dbat_loss_type={args.dbat_loss_type}_opt={args.opt}" + \
-               f"_ensemble_size={args.ensemble_size}_dataset={args.dataset}_majority_only={args.majority_only}model={args.model}_pretrained={args.pretrained}_epochs={args.epochs}" 
+    log_name= f"alpha={args.alpha}_no_diversity={args.no_diversity}_opt={args.opt}" + \
+               f"_ensemble_size={args.ensemble_size}_dataset={args.dataset}_majority_only={args.majority_only}_model={args.model}_pretrained={args.pretrained}_epochs={args.epochs}" 
     
     if args.dataset == "cifar-10":
         exp_name=f"{exp_name}_semantic_idx={args.split_semantic_task_idx}_spurious_idx={args.split_spurious_task_idx}"
         log_name=f"{log_name}_semantic_idx={args.split_semantic_task_idx}_spurious_idx={args.split_spurious_task_idx}"
 
 
-    ckpt_path = f"{args.results_base_folder}/{args.dataset}/perturb={args.perturb_type}/{args.model}/ep{args.epochs}/{exp_name}"
+    ckpt_path = f"{args.results_base_folder}/{args.dataset}/perturb={args.perturb_type}/{args.model}_pretrained={args.pretrained}/ep{args.epochs}/{exp_name}"
     if not os.path.exists(ckpt_path):
         os.makedirs(ckpt_path)
     else:

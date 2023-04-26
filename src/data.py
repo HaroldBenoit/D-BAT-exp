@@ -134,47 +134,17 @@ def get_waterbird_v1(args): # confounder_strength = 0.95
     perturb_dl = get_train_loader("standard", data_perturb, batch_size=args.batch_size_train, num_workers=8, pin_memory=True)
     test_dl = get_eval_loader("standard", data_test, batch_size=args.batch_size_eval, num_workers=5, pin_memory=True)
     valid_dl = get_eval_loader("standard", data_valid, batch_size=args.batch_size_eval, num_workers=5, pin_memory=True)
-    
-    train_dl = WrappedDataLoader(train_dl, lambda x, y, meta: (x.to(args.device), y.to(args.device)))
-    valid_dl = WrappedDataLoader(valid_dl, lambda x, y, meta: (x.to(args.device), y.to(args.device)))
-    test_dl = WrappedDataLoader(test_dl, lambda x, y, meta: (x.to(args.device), y.to(args.device)))
-    perturb_dl = WrappedDataLoader(perturb_dl, lambda x, y, meta: (x.to(args.device), y.to(args.device)))
+
+    device_func = lambda x, y, meta: {"x": x.to(args.device), "y": y.to(args.device), "meta": meta.to(args.device)}
+    train_dl = WrappedDataLoader(train_dl, device_func)
+    valid_dl = WrappedDataLoader(valid_dl, device_func)
+    test_dl = WrappedDataLoader(test_dl, device_func)
+    perturb_dl = WrappedDataLoader(perturb_dl, device_func)
     
     return train_dl, valid_dl, test_dl, perturb_dl
 
 
-def get_camelyon17_v2(args): # ood = val_unlabeled
-    transform = transforms.Compose([
-        transforms.ToTensor()
-    ])
-    try:
-        dataset = get_wild_dataset(dataset="camelyon17", download=False, root_dir="./datasets/")
-    except:
-        dataset = get_wild_dataset(dataset="camelyon17", download=True, root_dir="./datasets/")
-    
-    data_train = dataset.get_subset("train", transform=transform)
-    data_test  = dataset.get_subset("test", transform=transform)
-    data_valid = dataset.get_subset("val", transform=transform)
-    try:
-        data_perturb = get_wild_dataset(dataset="camelyon17", download=False, unlabeled=True, root_dir="./datasets/")
-    except:
-        data_perturb = get_wild_dataset(dataset="camelyon17", download=True, unlabeled=True, root_dir="./datasets/")
-    data_perturb = data_perturb.get_subset("val_unlabeled", transform=transform) # train_unlabeled, val_unlabeled, test_unlabeled
-    
-    train_dl = get_train_loader("standard", data_train, batch_size=args.batch_size_train, num_workers=8, pin_memory=True)
-    perturb_dl = get_train_loader("standard", data_perturb, batch_size=args.batch_size_train, num_workers=8, pin_memory=True)
-    test_dl = get_eval_loader("standard", data_test, batch_size=args.batch_size_eval, num_workers=5, pin_memory=True)
-    valid_dl = get_eval_loader("standard", data_valid, batch_size=args.batch_size_eval, num_workers=5, pin_memory=True)
-    
-    train_dl = WrappedDataLoader(train_dl, lambda x, y, meta: (x.to(args.device), y.to(args.device)))
-    valid_dl = WrappedDataLoader(valid_dl, lambda x, y, meta: (x.to(args.device), y.to(args.device)))
-    test_dl = WrappedDataLoader(test_dl, lambda x, y, meta: (x.to(args.device), y.to(args.device)))
-    perturb_dl = WrappedDataLoader(perturb_dl, lambda x, y: (x.to(args.device), y.to(args.device)))
-    
-    return train_dl, valid_dl, test_dl, perturb_dl
-
-
-def get_camelyon17_v1(args): # ood = test_unlabeled
+def get_camelyon17(args): 
     transform = transforms.Compose([
         transforms.ToTensor()
     ])  
@@ -190,17 +160,25 @@ def get_camelyon17_v1(args): # ood = test_unlabeled
         data_perturb = get_wild_dataset(dataset="camelyon17", download=False, unlabeled=True, root_dir="./datasets/")
     except:
         data_perturb = get_wild_dataset(dataset="camelyon17", download=True, unlabeled=True, root_dir="./datasets/")
-    data_perturb = data_perturb.get_subset("test_unlabeled", transform=transform) # train_unlabeled, val_unlabeled, test_unlabeled
+
+    if args.perturb_type == "ood_is_test":
+        data_perturb = data_perturb.get_subset("test_unlabeled", transform=transform) # train_unlabeled, val_unlabeled, test_unlabeled
+    elif args.perturb_type == "ood_is_not_test":
+        data_perturb = data_perturb.get_subset("val_unlabeled", transform=transform) # train_unlabeled, val_unlabeled, test_unlabeled
+    else:
+        NotImplementedError(f"Version of perturbations '{args.perturb_type}' not implemented for dataset '{args.dataset}'.")
     
     train_dl = get_train_loader("standard", data_train, batch_size=args.batch_size_train, num_workers=8, pin_memory=True)
     perturb_dl = get_train_loader("standard", data_perturb, batch_size=args.batch_size_train, num_workers=8, pin_memory=True)
     test_dl = get_eval_loader("standard", data_test, batch_size=args.batch_size_eval, num_workers=5, pin_memory=True)
     valid_dl = get_eval_loader("standard", data_valid, batch_size=args.batch_size_eval, num_workers=5, pin_memory=True)
     
-    train_dl = WrappedDataLoader(train_dl, lambda x, y, meta: (x.to(args.device), y.to(args.device)))
-    valid_dl = WrappedDataLoader(valid_dl, lambda x, y, meta: (x.to(args.device), y.to(args.device)))
-    test_dl = WrappedDataLoader(test_dl, lambda x, y, meta: (x.to(args.device), y.to(args.device)))
-    perturb_dl = WrappedDataLoader(perturb_dl, lambda x, y: (x.to(args.device), y.to(args.device)))
+    device_func = lambda x, y, meta: {"x": x.to(args.device), "y": y.to(args.device), "meta": meta.to(args.device)}
+    train_dl = WrappedDataLoader(train_dl, device_func)
+    valid_dl = WrappedDataLoader(valid_dl, device_func)
+    test_dl = WrappedDataLoader(test_dl, device_func)
+    ## not the same because no y attribute
+    perturb_dl = WrappedDataLoader(perturb_dl, lambda x, meta: {"x": x.to(args.device),"meta": meta.to(args.device)})
     
     return train_dl, valid_dl, test_dl, perturb_dl
 
@@ -223,16 +201,6 @@ def CIFAR_with_spurious(cls, args):
         '__getitem__': __getitem__,
     })
 
-def WrappedDataLoaderNew(cls, func):
-
-    def __iter__(self):
-        batches = cls.__iter__(self)
-        for b in batches:
-            yield (func(*b))
-
-    return type(cls.__name__, (cls,), {
-        '__iter__': __iter__,
-    })
 
 def get_cifar_10(args):
 
@@ -244,6 +212,7 @@ def get_cifar_10(args):
     )
     ])
 
+    ## makes it so that both semantic labelling and spurious labelling are returned
     CIFAR10WithIndicies = CIFAR_with_spurious(torchvision.datasets.CIFAR10, args)
 
     try:
@@ -277,18 +246,16 @@ def get_cifar_10(args):
     dataset_perturbed = unlabeled_dataset_train
     dataset_train = labeled_dataset_train
 
-    #DataLoaderNew = WrappedDataLoaderNew(DataLoader, lambda x, y, idx: (x.to(args.device), y.to(args.device), idx.to(args.device)))
-
     train_dl = DataLoader(dataset_train, batch_size=args.batch_size_train, num_workers=8, shuffle=True)
     valid_dl = DataLoader(dataset_val, batch_size=args.batch_size_eval, num_workers=5, shuffle=False)
     test_dl = DataLoader(test_dataset, batch_size=args.batch_size_eval, num_workers=5, shuffle=False)
     perturb_dl = DataLoader(dataset_perturbed, batch_size=args.batch_size_train, num_workers=8, shuffle=True)
 
-#
-    train_dl = WrappedDataLoader(train_dl, lambda x, y, idx: (x.to(args.device), y.to(args.device), idx.to(args.device)))
-    valid_dl = WrappedDataLoader(valid_dl, lambda x, y, idx: (x.to(args.device), y.to(args.device), idx.to(args.device)))
-    test_dl = WrappedDataLoader(test_dl, lambda x, y, idx: (x.to(args.device), y.to(args.device), idx.to(args.device)))
-    perturb_dl = WrappedDataLoader(perturb_dl, lambda x, y, idx: (x.to(args.device), y.to(args.device), idx.to(args.device)))
+    device_func = lambda x, y, spurious_y: {"x" : x.to(args.device), "y": y.to(args.device), "spurious_y":spurious_y.to(args.device)}
+    train_dl = WrappedDataLoader(train_dl, device_func)
+    valid_dl = WrappedDataLoader(valid_dl, device_func)
+    test_dl = WrappedDataLoader(test_dl,device_func )
+    perturb_dl = WrappedDataLoader(perturb_dl, device_func)
     
     return train_dl, valid_dl, test_dl, perturb_dl
 
@@ -299,12 +266,7 @@ def get_dataset(args):
         else:
             NotImplementedError(f"Version of perturbations '{args.perturb_type}' not implemented for dataset '{args.dataset}'.")
     elif args.dataset == 'camelyon17':
-        if args.perturb_type == 'ood_is_not_test':
-            return get_camelyon17_v2(args)
-        if args.perturb_type == 'ood_is_test':
-            return get_camelyon17_v1(args)
-        else:
-            NotImplementedError(f"Version of perturbations '{args.perturb_type}' not implemented for dataset '{args.dataset}'.")
+        return get_camelyon17(args=args)
     elif args.dataset == 'waterbird':
         if args.perturb_type == 'ood_is_test':
             return get_waterbird_v1(args)
