@@ -11,6 +11,7 @@ from wilds.datasets.waterbirds_dataset import WaterbirdsDataset
 from cifar_task import CIFARClassificationTask
 import pandas as pd
 from torch.utils.data import DataLoader, Dataset, random_split, Subset
+import random
 
 class WrappedDataLoader:
     def __init__(self, dl, func):
@@ -26,6 +27,10 @@ class WrappedDataLoader:
         for b in batches:
             yield (self.func(*b))
 
+def seed_worker(worker_id):
+    worker_seed = torch.initial_seed() % 2**32
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
 
 def process_dataset_65_classes_office_home(datasets, device=None, shuffle=True):
     final_X, final_Y = [], []
@@ -87,10 +92,13 @@ def get_OH_65classes_v2(args):
     data_test, data_valid = torch.utils.data.random_split(data_test, [len(data_test)-800, 800], 
                                                           generator=torch.Generator().manual_seed(42))
     
-    train_dl = DataLoader(data_train, batch_size=args.batch_size_train, shuffle=True)
-    valid_dl = DataLoader(data_valid, batch_size=args.batch_size_eval, shuffle=False)
-    test_dl = DataLoader(data_test, batch_size=args.batch_size_eval, shuffle=False)
-    perturb_dl = DataLoader(data_perturb, batch_size=args.batch_size_train, shuffle=True)
+    g = torch.Generator()
+    g.manual_seed(args.seed)
+
+    train_dl = DataLoader(data_train, batch_size=args.batch_size_train, worker_init=seed_worker, generator=g, shuffle=True)
+    valid_dl = DataLoader(data_valid, batch_size=args.batch_size_eval, worker_init=seed_worker, generator=g, shuffle=False)
+    test_dl = DataLoader(data_test, batch_size=args.batch_size_eval, worker_init=seed_worker, generator=g, shuffle=False)
+    perturb_dl = DataLoader(data_perturb, batch_size=args.batch_size_train, worker_init=seed_worker, generator=g, shuffle=True)
     
     return train_dl, valid_dl, test_dl, perturb_dl
 
@@ -125,15 +133,19 @@ def get_waterbird_v1(args): # confounder_strength = 0.95
     if args.majority_only:
         dataset = majority_only_waterbirds_dataset(dataset=dataset)
 
+    g = torch.Generator()
+    g.manual_seed(args.seed)
+
+
     data_train = dataset.get_subset("train", transform=transform_test)
     data_test  = dataset.get_subset("test", transform=transform_test)
     data_valid = dataset.get_subset("val", transform=transform_test)
     data_perturb = data_valid
     
-    train_dl = get_train_loader("standard", data_train, batch_size=args.batch_size_train, num_workers=8, pin_memory=True)
-    perturb_dl = get_train_loader("standard", data_perturb, batch_size=args.batch_size_train, num_workers=8, pin_memory=True)
-    test_dl = get_eval_loader("standard", data_test, batch_size=args.batch_size_eval, num_workers=5, pin_memory=True)
-    valid_dl = get_eval_loader("standard", data_valid, batch_size=args.batch_size_eval, num_workers=5, pin_memory=True)
+    train_dl = get_train_loader("standard", data_train, batch_size=args.batch_size_train, worker_init=seed_worker, generator=g,  num_workers=8, pin_memory=True)
+    perturb_dl = get_train_loader("standard", data_perturb, batch_size=args.batch_size_train, worker_init=seed_worker, generator=g,  num_workers=8, pin_memory=True)
+    test_dl = get_eval_loader("standard", data_test, batch_size=args.batch_size_eval, worker_init=seed_worker, generator=g,  num_workers=5, pin_memory=True)
+    valid_dl = get_eval_loader("standard", data_valid, batch_size=args.batch_size_eval, worker_init=seed_worker, generator=g,  num_workers=5, pin_memory=True)
 
     device_func = lambda x, y, meta: {"x": x.to(args.device), "y": y.to(args.device), "meta": meta.to(args.device)}
     train_dl = WrappedDataLoader(train_dl, device_func)
@@ -167,11 +179,14 @@ def get_camelyon17(args):
         data_perturb = data_perturb.get_subset("val_unlabeled", transform=transform) # train_unlabeled, val_unlabeled, test_unlabeled
     else:
         NotImplementedError(f"Version of perturbations '{args.perturb_type}' not implemented for dataset '{args.dataset}'.")
+
+    g = torch.Generator()
+    g.manual_seed(args.seed)
     
-    train_dl = get_train_loader("standard", data_train, batch_size=args.batch_size_train, num_workers=8, pin_memory=True)
-    perturb_dl = get_train_loader("standard", data_perturb, batch_size=args.batch_size_train, num_workers=8, pin_memory=True)
-    test_dl = get_eval_loader("standard", data_test, batch_size=args.batch_size_eval, num_workers=5, pin_memory=True)
-    valid_dl = get_eval_loader("standard", data_valid, batch_size=args.batch_size_eval, num_workers=5, pin_memory=True)
+    train_dl = get_train_loader("standard", data_train, batch_size=args.batch_size_train, worker_init=seed_worker, generator=g,  num_workers=8, pin_memory=True)
+    perturb_dl = get_train_loader("standard", data_perturb, batch_size=args.batch_size_train, worker_init=seed_worker, generator=g,  num_workers=8, pin_memory=True)
+    test_dl = get_eval_loader("standard", data_test, batch_size=args.batch_size_eval, worker_init=seed_worker, generator=g,  num_workers=5, pin_memory=True)
+    valid_dl = get_eval_loader("standard", data_valid, batch_size=args.batch_size_eval, worker_init=seed_worker, generator=g,  num_workers=5, pin_memory=True)
     
     device_func = lambda x, y, meta: {"x": x.to(args.device), "y": y.to(args.device), "meta": meta.to(args.device)}
     train_dl = WrappedDataLoader(train_dl, device_func)
@@ -246,10 +261,13 @@ def get_cifar_10(args):
     dataset_perturbed = unlabeled_dataset_train
     dataset_train = labeled_dataset_train
 
-    train_dl = DataLoader(dataset_train, batch_size=args.batch_size_train, num_workers=8, shuffle=True)
-    valid_dl = DataLoader(dataset_val, batch_size=args.batch_size_eval, num_workers=5, shuffle=False)
-    test_dl = DataLoader(test_dataset, batch_size=args.batch_size_eval, num_workers=5, shuffle=False)
-    perturb_dl = DataLoader(dataset_perturbed, batch_size=args.batch_size_train, num_workers=8, shuffle=True)
+    g = torch.Generator()
+    g.manual_seed(args.seed)
+
+    train_dl = DataLoader(dataset_train, batch_size=args.batch_size_train, worker_init=seed_worker, generator=g,  num_workers=8, shuffle=True)
+    valid_dl = DataLoader(dataset_val, batch_size=args.batch_size_eval, worker_init=seed_worker, generator=g,  num_workers=5, shuffle=False)
+    test_dl = DataLoader(test_dataset, batch_size=args.batch_size_eval, worker_init=seed_worker, generator=g,  num_workers=5, shuffle=False)
+    perturb_dl = DataLoader(dataset_perturbed, batch_size=args.batch_size_train, worker_init=seed_worker, generator=g,  num_workers=8, shuffle=True)
 
     device_func = lambda x, y, spurious_y: {"x" : x.to(args.device), "y": y.to(args.device), "spurious_y":spurious_y.to(args.device)}
     train_dl = WrappedDataLoader(train_dl, device_func)

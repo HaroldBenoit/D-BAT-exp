@@ -357,9 +357,26 @@ def train(get_model, get_opt, num_models, train_dl, valid_dl, test_dl, perturb_d
     stats["unlabeled_final_similarty"] = sim_table.tolist()
     logs["unlabeled/final_similarity_heatmap"] = heatmap_fig(sim_table)
 
+
     if not(args.nologger):
         wandb.log(logs)
 
+
+
+
+    ## SAVE MODEL CHECKPOINTS
+
+    if not(args.nologger):
+        torch.save({'ensemble': [model.state_dict() for model in ensemble], 
+                    'ensemble_early_stopped': ensemble_early_stopped, 
+                    'last_opt': opt.state_dict(),
+                    'last_scheduler': scheduler.state_dict() if scheduler is not None else None,
+                    'last_epoch': epoch,
+                    'last_m_idx': m_idx,
+                    'last_itr': itr,
+                    'last_best_valid_acc': last_best_valid_acc,
+                   }, ckpt_path)
+        
 
     return stats
 
@@ -370,8 +387,10 @@ def main(args):
     args.device = torch.device(args.device)
     
     torch.manual_seed(args.seed)
+    torch.cuda.manual_seed_all(args.seed)
     random.seed(args.seed)
     np.random.seed(args.seed)
+    torch.use_deterministic_algorithms(True)
     
     print(f"Loading dataset '{args.dataset}'")
     
