@@ -1,0 +1,20 @@
+##wandb
+
+group: "NP_CC_WaterBirds"
+
+##training
+ensemble_size: 2 
+batch_size_train: 128 
+batch_size_eval: 512 
+epochs: 150 
+lr: 0.001 
+opt: "sgd" 
+scheduler: "none" 
+model: "resnet50" 
+dataset: "waterbird" 
+eval_freq: 1000 
+l2_reg: 0.0001
+
+##important
+pretrained: False
+majority_only: True
