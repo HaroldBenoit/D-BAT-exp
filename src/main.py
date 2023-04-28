@@ -390,7 +390,7 @@ def main(args):
     torch.cuda.manual_seed_all(args.seed)
     random.seed(args.seed)
     np.random.seed(args.seed)
-    torch.use_deterministic_algorithms(True)
+    #torch.use_deterministic_algorithms(True)
     
     print(f"Loading dataset '{args.dataset}'")
     
