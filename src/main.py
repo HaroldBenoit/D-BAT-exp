@@ -184,6 +184,9 @@ def train(get_model, get_opt, num_models, train_dl, valid_dl, test_dl, perturb_d
                 logs["epoch"] = epoch
 
                 x_tilde = perturb_sampler()["x"]
+
+                m.eval()
+
                 with torch.no_grad():
                     ## computing the rate of the model on unlabeled data
                     unlabeled_logits = m(x_tilde)
@@ -198,7 +201,9 @@ def train(get_model, get_opt, num_models, train_dl, valid_dl, test_dl, perturb_d
                 if m_idx > 0:
                     sim_logs= get_batchwise_ensemble_similarity_logs(ensemble=ensemble[:m_idx+1],x_tilde=x_tilde)
                     logs = {**logs, **sim_logs}
-                
+
+                m.train()
+
                 logits= m(x)
                 out = torch.softmax(logits, dim=1) ## B*n_classes
                 preds= torch.argmax(out, dim=1) 
