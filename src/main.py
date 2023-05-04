@@ -392,7 +392,7 @@ def main(args):
     args.device = torch.device(args.device)
     
     torch.manual_seed(args.seed)
-    torch.cuda.manual_seed_all(args.seed)
+    #torch.cuda.manual_seed_all(args.seed)
     random.seed(args.seed)
     np.random.seed(args.seed)
     #torch.use_deterministic_algorithms(True)
