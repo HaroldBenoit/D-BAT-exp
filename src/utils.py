@@ -123,8 +123,8 @@ def get_batchwise_ensemble_similarity_logs(ensemble, x_tilde):
     logs[f"unlabeled/similarity_min_{len(ensemble)}"] = sims.min()
     logs[f"unlabeled/similarity_max_{len(ensemble)}"] = sims.max()
 
-    for model in ensemble:
-        model.train()
+    # for model in ensemble:
+    #     model.train()
 
     return logs
 
