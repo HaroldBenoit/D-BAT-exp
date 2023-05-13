@@ -50,7 +50,8 @@ def get_args():
     parser.add_argument('--alpha', default=1.0, type=float)
     parser.add_argument('--majority_only', default=False, action="store_true") ## whether the training data spurious feature is completely correlated with semantic    
     # Dataset and model
-    parser.add_argument('--model', default='resnet50', choices=['resnet18', 'resnet50'])
+    parser.add_argument('--root_dir', default="./datasets", type=str)
+    parser.add_argument('--model', default='resnet50', choices=['resnet18', 'resnet50', "resnet50SIMCLRv2", "robust_resnet50"])
     parser.add_argument('--dataset', default='camelyon17', choices=['waterbird', 'camelyon17', 'oh-65cls', 'cifar-10'])
     parser.add_argument('--split_semantic_task_idx', type=int, default=0,help= "") 
     parser.add_argument('--split_spurious_task_idx', type=int, default=0,help= "") 
@@ -66,6 +67,7 @@ def get_args():
 
     parser.add_argument('--pretrained', action="store_true", default=False)
 
+    parser.add_argument('--grayscale', default=False, action="store_true")
 
     ## Logging params
     parser.add_argument('--group', type=str, default='D-BAT')
@@ -74,6 +76,7 @@ def get_args():
     parser.add_argument('--project_name', type=str, default='Conditional-AS')
     parser.add_argument('--entity', type=str, default='task-discovery')
     parser.add_argument('--nologger', action='store_true', default=False)
+    parser.add_argument('--no_wandb', default=False, action="store_true")
     parser.add_argument('--resume_id', default="")
     parser.add_argument('--no_resume', dest='resume', action='store_false', default=True)
 
@@ -343,12 +346,12 @@ def train(get_model, get_opt, num_models, train_dl, valid_dl, test_dl, perturb_d
     stats['ensemble-test-acc'] = test_acc_ensemble
     print(f"[test (last iterates ensemble)] test-acc: {test_acc_ensemble:.3f}") 
     
-    test_acc_ensemble_per_ens_size = None
-    if len(ensemble) > 2: # ensemble test accs for sub-ensembles
-        test_acc_ensemble_per_ens_size = [get_acc_ensemble(ensemble[:ne], test_dl) for ne in range(2, len(ensemble)+1)]
-        ens_gs = ", ".join([f"{x:.3f}" for x in test_acc_ensemble_per_ens_size])
-        print(f"[test ensemble given size] {stats['test-acc'][0]:.3f}, {ens_gs}")
-    stats['test_acc_ensemble_per_ens_size'] = test_acc_ensemble_per_ens_size
+    #test_acc_ensemble_per_ens_size = None
+    #if len(ensemble) > 2: # ensemble test accs for sub-ensembles
+    #    test_acc_ensemble_per_ens_size = [get_acc_ensemble(ensemble[:ne], test_dl) for ne in range(2, len(ensemble)+1)]
+    #    ens_gs = ", ".join([f"{x:.3f}" for x in test_acc_ensemble_per_ens_size])
+    #    print(f"[test ensemble given size] {stats['test-acc'][0]:.3f}, {ens_gs}")
+    #stats['test_acc_ensemble_per_ens_size'] = test_acc_ensemble_per_ens_size
 
 
     ## pairwise similarities

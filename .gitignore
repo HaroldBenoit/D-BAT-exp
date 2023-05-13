@@ -3,3 +3,5 @@ exps/
 results_reproduction*/
 varying_pretraining/
 *__pycache__*
+heads*/
+alpha=0.1_train/

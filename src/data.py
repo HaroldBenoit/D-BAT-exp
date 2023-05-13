@@ -122,16 +122,21 @@ def majority_only_waterbirds_dataset(dataset:WaterbirdsDataset) -> WaterbirdsDat
 
 def get_waterbird_v1(args): # confounder_strength = 0.95
     scale = 256.0/224.0
-    transform_test = transforms.Compose([
+    transform_list= [
         transforms.Resize((int(224*scale), int(224*scale))),
         transforms.CenterCrop((224, 224)),
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    ])
+    ]
+    if args.grayscale:
+        transform_list.append(transforms.Grayscale())
+
+    transform_test = transforms.Compose(transform_list)
     try:
-        dataset = get_wild_dataset(dataset="waterbirds", download=False, root_dir="./datasets")
+        args.root_dir
+        dataset = get_wild_dataset(dataset="waterbirds", download=False, root_dir=args.root_dir)
     except:
-        dataset = get_wild_dataset(dataset="waterbirds", download=True, root_dir="./datasets")
+        dataset = get_wild_dataset(dataset="waterbirds", download=True, root_dir=args.root_dir)
     
     if args.majority_only:
         dataset = majority_only_waterbirds_dataset(dataset=dataset)
@@ -164,17 +169,17 @@ def get_camelyon17(args):
         transforms.ToTensor()
     ])  
     try:
-        dataset = get_wild_dataset(dataset="camelyon17", download=False, root_dir="./datasets/")
+        dataset = get_wild_dataset(dataset="camelyon17", download=False, root_dir=args.root_dir)
     except:
-        dataset = get_wild_dataset(dataset="camelyon17", download=True, root_dir="./datasets/")
+        dataset = get_wild_dataset(dataset="camelyon17", download=True, root_dir=args.root_dir)
     
     data_train = dataset.get_subset("train", transform=transform)
     data_test  = dataset.get_subset("test", transform=transform)
     data_valid = dataset.get_subset("val", transform=transform)
     try:
-        data_perturb = get_wild_dataset(dataset="camelyon17", download=False, unlabeled=True, root_dir="./datasets/")
+        data_perturb = get_wild_dataset(dataset="camelyon17", download=False, unlabeled=True, root_dir=args.root_dir)
     except:
-        data_perturb = get_wild_dataset(dataset="camelyon17", download=True, unlabeled=True, root_dir="./datasets/")
+        data_perturb = get_wild_dataset(dataset="camelyon17", download=True, unlabeled=True, root_dir=args.root_dir)
 
     if args.perturb_type == "ood_is_test":
         data_perturb = data_perturb.get_subset("test_unlabeled", transform=transform) # train_unlabeled, val_unlabeled, test_unlabeled
