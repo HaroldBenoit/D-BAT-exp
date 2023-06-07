@@ -5,3 +5,4 @@ varying_pretraining/
 *__pycache__*
 heads*/
 alpha=0.1_train/
+inverse_correlated*/

@@ -120,6 +120,19 @@ def majority_only_waterbirds_dataset(dataset:WaterbirdsDataset) -> WaterbirdsDat
 
     return dataset
 
+def inverse_correlated_unlabeled_waterbirds(dataset:WaterbirdsDataset) -> WaterbirdsDataset:
+    val_split_mask = dataset.split_array == dataset.split_dict["val"]
+    val_split_idx = np.where(val_split_mask)[0]
+
+    val_metadata_array = dataset.metadata_array[val_split_mask,:]
+
+    spurious = (val_metadata_array[:,0].numpy() == val_metadata_array[:,1].numpy())
+    spurious_val_split_idx = val_split_idx[spurious]
+    # little cheat to make the spurious val data points not attached to any split (train,val, test)
+    dataset.split_array[spurious_val_split_idx] = -1
+    
+    return dataset
+
 def get_waterbird_v1(args): # confounder_strength = 0.95
     scale = 256.0/224.0
     transform_list= [
@@ -129,7 +142,7 @@ def get_waterbird_v1(args): # confounder_strength = 0.95
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ]
     if args.grayscale:
-        transform_list.append(transforms.Grayscale())
+        transform_list.append(transforms.Grayscale(num_output_channels=3))
 
     transform_test = transforms.Compose(transform_list)
     try:
@@ -140,6 +153,10 @@ def get_waterbird_v1(args): # confounder_strength = 0.95
     
     if args.majority_only:
         dataset = majority_only_waterbirds_dataset(dataset=dataset)
+
+
+    if args.inverse_correlation:
+        dataset = inverse_correlated_unlabeled_waterbirds(dataset=dataset)
 
     g = torch.Generator()
     g.manual_seed(args.seed)

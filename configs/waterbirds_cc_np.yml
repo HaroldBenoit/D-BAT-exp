@@ -6,7 +6,7 @@ group: "NP_CC_WaterBirds"
 ensemble_size: 2 
 batch_size_train: 128 
 batch_size_eval: 512 
-epochs: 150 
+epochs: 100 
 lr: 0.001 
 opt: "sgd" 
 scheduler: "none" 

@@ -5,6 +5,7 @@ import torchvision.models as model_zoo
 import numpy as np 
 from resnet_simclr import get_resnet
 from robust_resnet import get_robust_resnet50
+from debiased_resnet import Model
     
 def get_model_func(args):
     if args.dataset == 'camelyon17':
@@ -32,6 +33,36 @@ def get_model_func(args):
                 m.fc = nn.Linear(d, 2)
                 return m.to(args.device)
             return m_f
+        elif args.model == "vit_b_16":
+            def m_f():
+                pretrained = None if not(args.pretrained) else 'IMAGENET1K_V1'
+                m = model_zoo.vit_b_16(weights=pretrained)
+                m.heads = nn.Linear(in_features=768, out_features=2, bias=True)
+                return m.to(args.device)
+            
+            return m_f
+        elif args.model == "resnet50SwAV":
+            def m_f():
+                model = torch.hub.load('facebookresearch/swav:main', 'resnet50')
+                d = model.fc.in_features
+                model.fc = nn.Linear(d, 2)
+                return model.to(args.device)
+            return m_f
+        elif args.model == "resnet50MocoV2":
+            def m_f():
+                state = torch.load("/datasets/home/hbenoit/mocov2/moco_v2_800ep_pretrain.pth.tar")
+                new_state = {k.replace("module.encoder_q.",""):v for k,v in state["state_dict"].items()}
+                for i in ["0","2"]:
+                    new_state.pop(f"fc.{i}.bias")
+                    new_state.pop(f"fc.{i}.weight")
+
+                model = model_zoo.resnet50(pretrained=False)
+                d = model.fc.in_features
+                model.load_state_dict(new_state, strict=False)
+                model.fc = nn.Linear(d, 2)
+                return model.to(args.device)
+            
+            return m_f
         elif args.model == "resnet50SIMCLRv2":
             def m_f():
                 model, _ = get_resnet(depth=50, width_multiplier=1, sk_ratio=0)
@@ -39,6 +70,15 @@ def get_model_func(args):
                 model.load_state_dict(state["resnet"])
                 d = model.fc.in_features
                 model.fc = nn.Linear(d, 2)
+                return model.to(args.device)
+            return m_f
+        elif args.model == "resnet50Debiased":
+            raise NotImplementedError
+            def m_f():
+                model = Model()
+                state = torch.load("/datasets/home/hbenoit/debiased/256_model_400_pi01.pth")
+                new_state = {k.replace("module.",""):v for k,v in state.items()}
+                model.load_state_dict(state_dict=new_state, strict=False)
                 return model.to(args.device)
             return m_f
         elif args.model == "robust_resnet50":
