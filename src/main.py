@@ -35,7 +35,7 @@ def get_args():
     parser.add_argument('--batch_size_eval', default=512, type=int)
     parser.add_argument('--seed', default=0, type=int)
     parser.add_argument('--device', default='cuda:0', type=str)
-    parser.add_argument('--epochs', default=50, type=int)
+    parser.add_argument('--epochs', nargs="+" ,default=50, type=int)
     parser.add_argument('--lr', default=0.001, type=float)
     parser.add_argument('--l2_reg', default=0.0005, type=float)
     parser.add_argument('--scheduler', default='none', choices=['triangle', 'multistep', 'cosine', 'none'])
@@ -52,7 +52,7 @@ def get_args():
     parser.add_argument('--inverse_correlation', default=False, action="store_true") ## whether the unlabeled data spurious feature is inversely correlated with semantic    
     # Dataset and model
     parser.add_argument('--root_dir', default="./datasets", type=str)
-    parser.add_argument('--model', default='resnet50', choices=['resnet18', 'resnet50', "vit_b_16", "resnet50SIMCLRv2", "resnet50SwAV", "robust_resnet50", "resnet50MocoV2", "resnet50Debiased"])
+    parser.add_argument('--model', nargs="+", default='resnet50', choices=['resnet18', 'resnet50', 'resnet50_np', "vit_b_16", "resnet50SIMCLRv2", "resnet50SwAV", "robust_resnet50", "resnet50MocoV2", "resnet50Debiased"])
     parser.add_argument('--dataset', default='camelyon17', choices=['waterbird', 'camelyon17', 'oh-65cls', 'cifar-10'])
     parser.add_argument('--split_semantic_task_idx', type=int, default=0,help= "") 
     parser.add_argument('--split_spurious_task_idx', type=int, default=0,help= "") 
@@ -141,12 +141,12 @@ def eval_val_metrics(m:nn.Module, m_idx:int, valid_dl:DataLoader, args, itr:int,
 
     return logs
 
-def train(get_model, get_opt, num_models, train_dl, valid_dl, test_dl, perturb_dl, get_scheduler=None, max_epoch=10, 
+def train(ensemble, get_opt, num_models, train_dl, valid_dl, test_dl, perturb_dl, get_scheduler=None, list_epochs=10, 
           eval_freq=400, ckpt_freq=1, ckpt_path="", alpha=1.0, use_diversity_reg=True, dbat_loss_type='v1', extra_args=None):
     
 
     
-    ensemble = [get_model() for _ in range(num_models)]
+
     ensemble_early_stopped = [None for _ in range(num_models)]
     
     last_opt = None
@@ -193,7 +193,7 @@ def train(get_model, get_opt, num_models, train_dl, valid_dl, test_dl, perturb_d
             perturb_sampler = dl_to_sampler(perturb_dl)
 
 
-            for epoch in tqdm(range(start_epoch, max_epoch)):
+            for epoch in tqdm(range(start_epoch, list_epochs[m_idx])):
 
 
                 for batch in train_dl:
@@ -321,7 +321,7 @@ def train(get_model, get_opt, num_models, train_dl, valid_dl, test_dl, perturb_d
                                     'last_best_valid_acc': last_best_valid_acc,
                                    }, ckpt_path)
 
-                if epoch == (max_epoch -1):
+                if epoch == (list_epochs[m_idx] -1):
                     logs=eval_val_metrics(m=m,m_idx=m_idx, valid_dl=valid_dl, args=args, itr=itr, epoch=epoch, adv_loss=adv_loss,
                                          erm_loss=erm_loss, loss=loss, ensemble_early_stopped=ensemble_early_stopped, last_best_valid_acc=last_best_valid_acc,
                                          scheduler=scheduler, stats=stats,logs={}, ensemble=ensemble)
@@ -431,7 +431,6 @@ def main(args):
     print(f"Test dataset length: {len(test_dl.dataset)}")
     print(f"Perturbations dataset length: {len(perturb_dl.dataset)}")
     
-    get_model = get_model_func(args)
     
     if args.opt == 'adamw':
         get_opt = lambda p: torch.optim.AdamW(p, lr=args.lr, weight_decay=0.05)
@@ -457,9 +456,9 @@ def main(args):
         get_scheduler = None
 
     
-    exp_name = f"ep={args.epochs}_lrmax={args.lr}_alpha={args.alpha}_dataset={args.dataset}_perturb_type={args.perturb_type}" + \
+    exp_name = f"ep={args.epochs}_lrmax={args.lr}_alpha={args.alpha}_dataset={args.dataset}" + \
                f"_model={args.model}_pretrained={args.pretrained}_scheduler={args.scheduler}_seed={args.seed}_opt={args.opt}_ensemble_size={args.ensemble_size}" + \
-               f"_no_diversity={args.no_diversity}_dbat_loss_type={args.dbat_loss_type}_weight_decay={args.l2_reg}_no_nesterov_majority_only={args.majority_only}"
+               f"_no_diversity={args.no_diversity}"
     
 
     log_name= f"alpha={args.alpha}_no_diversity={args.no_diversity}_opt={args.opt}" + \
@@ -507,7 +506,28 @@ def main(args):
 
 
     print(f"\nTraining \n{vars(args)}\n")
-    stats = train(get_model, get_opt, args.ensemble_size, train_dl, valid_dl, test_dl, perturb_dl, get_scheduler, max_epoch= args.epochs, 
+    print("model", args.model, len(args.model))
+    if isinstance(args.model, str):
+        get_model = get_model_func(args,model= args.model)
+        ensemble = [get_model() for _ in range(args.ensemble_size)]
+    elif isinstance(args.model, list) and len(args.model)== args.ensemble_size:
+        ensemble = [get_model_func(args, model=args.model[i])() for i in range(args.ensemble_size)]
+    else:
+        raise ValueError(f"Such arguments are not defined: {args.model}")
+
+    if isinstance(args.epochs, list):
+        if len(args.epochs) == 1:
+            list_epochs=[args.epochs[0] for _ in range(args.ensemble_size)]
+        elif len(args.epochs) == args.ensemble_size:
+            list_epochs = args.epochs
+    elif isinstance(args.epochs, int):
+        list_epochs = [args.epochs]*args.ensemble_size
+    else:
+        raise ValueError(f" Such epoch argument is not defined: {args.epochs}")
+
+
+
+    stats = train(ensemble, get_opt, args.ensemble_size, train_dl, valid_dl, test_dl, perturb_dl, get_scheduler, list_epochs= list_epochs, 
                   eval_freq=args.eval_freq, ckpt_freq=1, ckpt_path=f"{ckpt_path}/ckpt.pt", alpha=args.alpha, 
                   use_diversity_reg=not args.no_diversity, dbat_loss_type=args.dbat_loss_type, extra_args=args)
     

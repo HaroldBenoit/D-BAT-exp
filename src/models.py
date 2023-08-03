@@ -7,9 +7,9 @@ from resnet_simclr import get_resnet
 from robust_resnet import get_robust_resnet50
 from debiased_resnet import Model
     
-def get_model_func(args):
+def get_model_func(args, model):
     if args.dataset == 'camelyon17':
-        if args.model == 'resnet50':
+        if model == 'resnet50':
             def m_f():
                 m = model_zoo.resnet50(pretrained=args.pretrained)
                 d = m.fc.in_features
@@ -17,23 +17,30 @@ def get_model_func(args):
                 return m.to(args.device)
             return m_f
         else:
-            raise NotImplementedError(f"Missing implemntation for model '{args.model}'.")
+            raise NotImplementedError(f"Missing implemntation for model '{model}'.")
     elif args.dataset == 'waterbird':
-        if args.model == 'resnet50':
+        if model == 'resnet50':
             def m_f():
                 m = model_zoo.resnet50(pretrained=args.pretrained)
                 d = m.fc.in_features
                 m.fc = nn.Linear(d, 2)
                 return m.to(args.device)
             return m_f
-        elif args.model == 'resnet18':
+        elif model == 'resnet50_np':
+            def m_f():
+                m = model_zoo.resnet50(pretrained=False)
+                d = m.fc.in_features
+                m.fc = nn.Linear(d, 2)
+                return m.to(args.device)
+            return m_f         
+        elif model == 'resnet18':
             def m_f():
                 m = model_zoo.resnet18(pretrained=args.pretrained)
                 d = m.fc.in_features
                 m.fc = nn.Linear(d, 2)
                 return m.to(args.device)
             return m_f
-        elif args.model == "vit_b_16":
+        elif model == "vit_b_16":
             def m_f():
                 pretrained = None if not(args.pretrained) else 'IMAGENET1K_V1'
                 m = model_zoo.vit_b_16(weights=pretrained)
@@ -41,14 +48,14 @@ def get_model_func(args):
                 return m.to(args.device)
             
             return m_f
-        elif args.model == "resnet50SwAV":
+        elif model == "resnet50SwAV":
             def m_f():
                 model = torch.hub.load('facebookresearch/swav:main', 'resnet50')
                 d = model.fc.in_features
                 model.fc = nn.Linear(d, 2)
                 return model.to(args.device)
             return m_f
-        elif args.model == "resnet50MocoV2":
+        elif model == "resnet50MocoV2":
             def m_f():
                 state = torch.load("/datasets/home/hbenoit/mocov2/moco_v2_800ep_pretrain.pth.tar")
                 new_state = {k.replace("module.encoder_q.",""):v for k,v in state["state_dict"].items()}
@@ -63,7 +70,7 @@ def get_model_func(args):
                 return model.to(args.device)
             
             return m_f
-        elif args.model == "resnet50SIMCLRv2":
+        elif model == "resnet50SIMCLRv2":
             def m_f():
                 model, _ = get_resnet(depth=50, width_multiplier=1, sk_ratio=0)
                 state = torch.load("/datasets/home/hbenoit/SimCLRv2-Pytorch/r50_1x_sk0.pth")
@@ -72,7 +79,7 @@ def get_model_func(args):
                 model.fc = nn.Linear(d, 2)
                 return model.to(args.device)
             return m_f
-        elif args.model == "resnet50Debiased":
+        elif model == "resnet50Debiased":
             raise NotImplementedError
             def m_f():
                 model = Model()
@@ -81,7 +88,7 @@ def get_model_func(args):
                 model.load_state_dict(state_dict=new_state, strict=False)
                 return model.to(args.device)
             return m_f
-        elif args.model == "robust_resnet50":
+        elif model == "robust_resnet50":
             def m_f():
                 robust = get_robust_resnet50()
                 state = torch.load("/datasets/home/hbenoit/robust_resnet/resnet50_l2_eps0.05.ckpt")
@@ -95,16 +102,16 @@ def get_model_func(args):
                 return robust.to(args.device)
             return m_f
         else:
-            raise NotImplementedError(f"Missing implemntation for model '{args.model}'.")
+            raise NotImplementedError(f"Missing implemntation for model '{model}'.")
     elif args.dataset == 'oh-65cls':
-        if args.model == 'resnet18':
+        if model == 'resnet18':
             def m_f():
                 m = model_zoo.resnet18(pretrained=args.pretrained)
                 d = m.fc.in_features
                 m.fc = nn.Linear(d, 65)
                 return m.to(args.device)
             return m_f
-        if args.model == 'resnet50':
+        if model == 'resnet50':
             def m_f():
                 m = model_zoo.resnet50(pretrained=args.pretrained)
                 d = m.fc.in_features
@@ -112,16 +119,16 @@ def get_model_func(args):
                 return m.to(args.device)
             return m_f
         else:
-            raise NotImplementedError(f"Missing implemntation for model '{args.model}'.")
+            raise NotImplementedError(f"Missing implemntation for model '{model}'.")
     elif args.dataset == 'cifar-10':
-        if args.model == 'resnet18':
+        if model == 'resnet18':
             def m_f():
                 m = model_zoo.resnet18(pretrained=args.pretrained)
                 d = m.fc.in_features
                 m.fc = nn.Linear(d, 2)
                 return m.to(args.device)
             return m_f
-        if args.model == 'resnet50':
+        if model == 'resnet50':
             def m_f():
                 m = model_zoo.resnet50(pretrained=args.pretrained)
                 d = m.fc.in_features
@@ -129,7 +136,7 @@ def get_model_func(args):
                 return m.to(args.device)
             return m_f
         else:
-            raise NotImplementedError(f"Missing implemntation for model '{args.model}'.")
+            raise NotImplementedError(f"Missing implemntation for model '{model}'.")
     else:
         raise KeyError(f"Unknown dataseet '{args.dataset}'.")
 

@@ -60,7 +60,7 @@ def get_OH_65classes_v1(args):
     data_train_2 = ImageFolder("./datasets/OfficeHomeDataset_10072016/Clipart", transform=data_transform)
     data_train = process_dataset_65_classes_office_home([data_train_1, data_train_2], device=args.device, shuffle=False)
 
-    data_test_1 = ImageFolder("./datasets/OfficeHomeDataset_10072016/Real-world", transform=data_transform)
+    data_test_1 = ImageFolder("./datasets/OfficeHomeDataset_10072016/Real World", transform=data_transform)
     data_test = process_dataset_65_classes_office_home([data_test_1], device=args.device, shuffle=False)
     data_test, data_valid, data_perturb = torch.utils.data.random_split(data_test, [1900, 500, 1957], 
                                                                         generator=torch.Generator().manual_seed(42))
@@ -72,6 +72,12 @@ def get_OH_65classes_v1(args):
     valid_dl = DataLoader(data_valid, batch_size=args.batch_size_eval,worker_init_fn=seed_worker, generator=g, shuffle=False)
     test_dl = DataLoader(data_test, batch_size=args.batch_size_eval, worker_init_fn=seed_worker, generator=g,shuffle=False)
     perturb_dl = DataLoader(data_perturb, batch_size=args.batch_size_train, worker_init_fn=seed_worker, generator=g, shuffle=True)
+
+    device_func = lambda x, y: {"x": x.to(args.device), "y": y.to(args.device)}
+    train_dl = WrappedDataLoader(train_dl, device_func)
+    valid_dl = WrappedDataLoader(valid_dl, device_func)
+    test_dl = WrappedDataLoader(test_dl, device_func)
+    perturb_dl = WrappedDataLoader(perturb_dl, device_func)
     
     return train_dl, valid_dl, test_dl, perturb_dl
 
@@ -86,7 +92,7 @@ def get_OH_65classes_v2(args):
     data_train_2 = ImageFolder("./datasets/OfficeHomeDataset_10072016/Clipart", transform=data_transform)
     data_train = process_dataset_65_classes_office_home([data_train_1, data_train_2], device=args.device, shuffle=True)
 
-    data_test = ImageFolder("./datasets/OfficeHomeDataset_10072016/Real-world", transform=data_transform)
+    data_test = ImageFolder("./datasets/OfficeHomeDataset_10072016/Real World", transform=data_transform)
     data_test = process_dataset_65_classes_office_home([data_test], device=args.device, shuffle=True)
 
     data_perturb = ImageFolder("./datasets/OfficeHomeDataset_10072016/Art", transform=data_transform)
@@ -318,8 +324,6 @@ def get_dataset(args):
     elif args.dataset == 'oh-65cls':
         if args.perturb_type == 'ood_is_test':
             return get_OH_65classes_v1(args)
-        if args.perturb_type == 'ood_is_not_test':
-            return get_OH_65classes_v2(args)
         else:
             NotImplementedError(f"Version of perturbations '{args.perturb_type}' not implemented for dataset '{args.dataset}'.")
     elif args.dataset == "cifar-10":
