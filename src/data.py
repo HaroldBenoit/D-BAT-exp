@@ -60,7 +60,7 @@ def get_OH_65classes_v1(args):
         saved_data_train_path = "/datasets/home/hbenoit/D-BAT-exp/datasets/office_home_train_vit.pt"
         saved_data_test_path = "/datasets/home/hbenoit/D-BAT-exp/datasets/office_home_test_vit.pt"
         data_transform = transforms.Compose([
-        transforms.Resize((160,160)),
+        transforms.Resize((224,224)),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
@@ -92,7 +92,8 @@ def get_OH_65classes_v1(args):
     
     data_test, data_valid, data_perturb = torch.utils.data.random_split(data_test, [1900, 500, 1957], 
                                                                         generator=torch.Generator().manual_seed(42))
-    
+
+
     g = torch.Generator()
     g.manual_seed(args.seed)
     
@@ -110,34 +111,6 @@ def get_OH_65classes_v1(args):
     return train_dl, valid_dl, test_dl, perturb_dl
 
 
-def get_OH_65classes_v2(args):
-    data_transform = transforms.Compose([
-        transforms.Resize((90, 90)), # spatial size of vgg-f input
-        transforms.ToTensor()
-    ])
-
-    data_train_1 = ImageFolder("/datasets/home/hbenoit/D-BAT-exp/datasets/OfficeHomeDataset_10072016/Product", transform=data_transform)
-    data_train_2 = ImageFolder("/datasets/home/hbenoit/D-BAT-exp/datasets/OfficeHomeDataset_10072016/Clipart", transform=data_transform)
-    data_train = process_dataset_65_classes_office_home([data_train_1, data_train_2], device=args.device, shuffle=True)
-
-    data_test = ImageFolder("/datasets/home/hbenoit/D-BAT-exp/datasets/OfficeHomeDataset_10072016/Real World", transform=data_transform)
-    data_test = process_dataset_65_classes_office_home([data_test], device=args.device, shuffle=True)
-
-    data_perturb = ImageFolder("/datasets/home/hbenoit/D-BAT-exp/datasets/OfficeHomeDataset_10072016/Art", transform=data_transform)
-    data_perturb = process_dataset_65_classes_office_home([data_perturb], device=args.device, shuffle=True)
-
-    data_test, data_valid = torch.utils.data.random_split(data_test, [len(data_test)-800, 800], 
-                                                          generator=torch.Generator().manual_seed(42))
-    
-    g = torch.Generator()
-    g.manual_seed(args.seed)
-
-    train_dl = DataLoader(data_train, batch_size=args.batch_size_train, worker_init_fn=seed_worker, generator=g, shuffle=True)
-    valid_dl = DataLoader(data_valid, batch_size=args.batch_size_eval, worker_init_fn=seed_worker, generator=g, shuffle=False)
-    test_dl = DataLoader(data_test, batch_size=args.batch_size_eval, worker_init_fn=seed_worker, generator=g, shuffle=False)
-    perturb_dl = DataLoader(data_perturb, batch_size=args.batch_size_train, worker_init_fn=seed_worker, generator=g, shuffle=True)
-    
-    return train_dl, valid_dl, test_dl, perturb_dl
 
 def majority_only_waterbirds_dataset(dataset:WaterbirdsDataset) -> WaterbirdsDataset:
     train_split_mask = dataset.split_array == dataset.split_dict["train"]
