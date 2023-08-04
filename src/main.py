@@ -52,7 +52,7 @@ def get_args():
     parser.add_argument('--inverse_correlation', default=False, action="store_true") ## whether the unlabeled data spurious feature is inversely correlated with semantic    
     # Dataset and model
     parser.add_argument('--root_dir', default="./datasets", type=str)
-    parser.add_argument('--model', nargs="+", default='resnet50', choices=['resnet18', 'resnet50', 'resnet50_np', "vit_b_16", "resnet50SIMCLRv2", "resnet50SwAV", "robust_resnet50", "resnet50MocoV2", "resnet50Debiased"])
+    parser.add_argument('--model', nargs="+", default='resnet50', type=str, choices=['resnet18', 'resnet50', 'resnet50_np', "vit_b_16", "resnet50SIMCLRv2", "resnet50SwAV", "robust_resnet50", "resnet50MocoV2", "resnet50Debiased"])
     parser.add_argument('--dataset', default='camelyon17', choices=['waterbird', 'camelyon17', 'oh-65cls', 'cifar-10'])
     parser.add_argument('--split_semantic_task_idx', type=int, default=0,help= "") 
     parser.add_argument('--split_spurious_task_idx', type=int, default=0,help= "") 
@@ -510,6 +510,10 @@ def main(args):
     if isinstance(args.model, str):
         get_model = get_model_func(args,model= args.model)
         ensemble = [get_model() for _ in range(args.ensemble_size)]
+    elif isinstance(args.model, list) and len(args.model) == 1:
+        args.model = args.model[0]
+        get_model = get_model_func(args,model= args.model)
+        ensemble = [get_model() for _ in range(args.ensemble_size)]
     elif isinstance(args.model, list) and len(args.model)== args.ensemble_size:
         ensemble = [get_model_func(args, model=args.model[i])() for i in range(args.ensemble_size)]
     else:
@@ -518,6 +522,7 @@ def main(args):
     if isinstance(args.epochs, list):
         if len(args.epochs) == 1:
             list_epochs=[args.epochs[0] for _ in range(args.ensemble_size)]
+            args.epochs = args.epochs[0]
         elif len(args.epochs) == args.ensemble_size:
             list_epochs = args.epochs
     elif isinstance(args.epochs, int):

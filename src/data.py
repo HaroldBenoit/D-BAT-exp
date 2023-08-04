@@ -12,6 +12,8 @@ from cifar_task import CIFARClassificationTask
 import pandas as pd
 from torch.utils.data import DataLoader, Dataset, random_split, Subset
 import random
+from tqdm import tqdm
+import os
 
 class WrappedDataLoader:
     def __init__(self, dl, func):
@@ -35,7 +37,7 @@ def seed_worker(worker_id):
 def process_dataset_65_classes_office_home(datasets, device=None, shuffle=True):
     final_X, final_Y = [], []
     for dataset in datasets:
-        for i, (x, y) in enumerate(dataset):
+        for i, (x, y) in tqdm(enumerate(dataset)):
             final_X.append(x)
             final_Y.append(y)
     X = torch.stack(final_X)
@@ -50,18 +52,44 @@ def process_dataset_65_classes_office_home(datasets, device=None, shuffle=True):
     return TensorDataset(X, Y)
 
 
+
 def get_OH_65classes_v1(args):
-    data_transform = transforms.Compose([
-        transforms.Resize((90, 90)),
-        transforms.ToTensor()
+
+
+    if "vit_b_16" in args.model:
+        saved_data_train_path = "/datasets/home/hbenoit/D-BAT-exp/datasets/office_home_train_vit.pt"
+        saved_data_test_path = "/datasets/home/hbenoit/D-BAT-exp/datasets/office_home_test_vit.pt"
+        data_transform = transforms.Compose([
+        transforms.Resize((160,160)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
+    else:
+        data_transform = transforms.Compose([
+        transforms.Resize((90, 90)),
+        transforms.ToTensor()])
+        saved_data_train_path = "/datasets/home/hbenoit/D-BAT-exp/datasets/office_home_train.pt"
+        saved_data_test_path = "/datasets/home/hbenoit/D-BAT-exp/datasets/office_home_test.pt"
 
-    data_train_1 = ImageFolder("./datasets/OfficeHomeDataset_10072016/Product", transform=data_transform)
-    data_train_2 = ImageFolder("./datasets/OfficeHomeDataset_10072016/Clipart", transform=data_transform)
-    data_train = process_dataset_65_classes_office_home([data_train_1, data_train_2], device=args.device, shuffle=False)
 
-    data_test_1 = ImageFolder("./datasets/OfficeHomeDataset_10072016/Real World", transform=data_transform)
-    data_test = process_dataset_65_classes_office_home([data_test_1], device=args.device, shuffle=False)
+
+    if os.path.exists(saved_data_train_path):
+        data_train = torch.load(saved_data_train_path)
+    else:
+        data_train_1 = ImageFolder("/datasets/home/hbenoit/D-BAT-exp/datasets/OfficeHomeDataset_10072016/Product", transform=data_transform)
+        data_train_2 = ImageFolder("/datasets/home/hbenoit/D-BAT-exp/datasets/OfficeHomeDataset_10072016/Clipart", transform=data_transform)
+        data_train = process_dataset_65_classes_office_home([data_train_1, data_train_2], device=args.device, shuffle=False)
+
+        torch.save(data_train, saved_data_train_path)
+
+
+    if os.path.exists(saved_data_test_path):
+        data_test = torch.load(saved_data_test_path)
+    else:
+        data_test_1 = ImageFolder("/datasets/home/hbenoit/D-BAT-exp/datasets/OfficeHomeDataset_10072016/Real World", transform=data_transform)
+        data_test = process_dataset_65_classes_office_home([data_test_1], device=args.device, shuffle=False)
+        torch.save(data_test, saved_data_test_path)
+    
     data_test, data_valid, data_perturb = torch.utils.data.random_split(data_test, [1900, 500, 1957], 
                                                                         generator=torch.Generator().manual_seed(42))
     
@@ -88,14 +116,14 @@ def get_OH_65classes_v2(args):
         transforms.ToTensor()
     ])
 
-    data_train_1 = ImageFolder("./datasets/OfficeHomeDataset_10072016/Product", transform=data_transform)
-    data_train_2 = ImageFolder("./datasets/OfficeHomeDataset_10072016/Clipart", transform=data_transform)
+    data_train_1 = ImageFolder("/datasets/home/hbenoit/D-BAT-exp/datasets/OfficeHomeDataset_10072016/Product", transform=data_transform)
+    data_train_2 = ImageFolder("/datasets/home/hbenoit/D-BAT-exp/datasets/OfficeHomeDataset_10072016/Clipart", transform=data_transform)
     data_train = process_dataset_65_classes_office_home([data_train_1, data_train_2], device=args.device, shuffle=True)
 
-    data_test = ImageFolder("./datasets/OfficeHomeDataset_10072016/Real World", transform=data_transform)
+    data_test = ImageFolder("/datasets/home/hbenoit/D-BAT-exp/datasets/OfficeHomeDataset_10072016/Real World", transform=data_transform)
     data_test = process_dataset_65_classes_office_home([data_test], device=args.device, shuffle=True)
 
-    data_perturb = ImageFolder("./datasets/OfficeHomeDataset_10072016/Art", transform=data_transform)
+    data_perturb = ImageFolder("/datasets/home/hbenoit/D-BAT-exp/datasets/OfficeHomeDataset_10072016/Art", transform=data_transform)
     data_perturb = process_dataset_65_classes_office_home([data_perturb], device=args.device, shuffle=True)
 
     data_test, data_valid = torch.utils.data.random_split(data_test, [len(data_test)-800, 800], 
@@ -262,12 +290,12 @@ def get_cifar_10(args):
     CIFAR10WithIndicies = CIFAR_with_spurious(torchvision.datasets.CIFAR10, args)
 
     try:
-        dataset = CIFAR10WithIndicies(root="./datasets/", train=True, download=True, transform=transform)
-        test_dataset = CIFAR10WithIndicies(root="./datasets/", train=False, download=True, transform=transform)
+        dataset = CIFAR10WithIndicies(root="/datasets/home/hbenoit/D-BAT-exp/datasets/", train=True, download=True, transform=transform)
+        test_dataset = CIFAR10WithIndicies(root="/datasets/home/hbenoit/D-BAT-exp/datasets/", train=False, download=True, transform=transform)
 
     except:
-        dataset = CIFAR10WithIndicies(root="./datasets/", train=True, download=False, transform=transform)
-        test_dataset = CIFAR10WithIndicies(root="./datasets/", train=False, download=False, transform=transform)
+        dataset = CIFAR10WithIndicies(root="/datasets/home/hbenoit/D-BAT-exp/datasets/", train=True, download=False, transform=transform)
+        test_dataset = CIFAR10WithIndicies(root="/datasets/home/hbenoit/D-BAT-exp/datasets/", train=False, download=False, transform=transform)
 
 
 

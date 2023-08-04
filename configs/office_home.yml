@@ -4,7 +4,7 @@ group: "OfficeHome_reproduction"
 
 ##training
 ensemble_size: 2 
-batch_size_train: 128 
+batch_size_train: 512 
 batch_size_eval: 512 
 epochs: 60 
 lr: 0.001 
