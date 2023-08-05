@@ -15,6 +15,7 @@ import random
 from tqdm import tqdm
 import os
 
+
 class WrappedDataLoader:
     def __init__(self, dl, func):
         self.dl = dl
@@ -100,7 +101,8 @@ def get_OH_65classes_v1(args):
     train_dl = DataLoader(data_train, batch_size=args.batch_size_train, worker_init_fn=seed_worker, generator=g, shuffle=True)
     valid_dl = DataLoader(data_valid, batch_size=args.batch_size_eval,worker_init_fn=seed_worker, generator=g, shuffle=False)
     test_dl = DataLoader(data_test, batch_size=args.batch_size_eval, worker_init_fn=seed_worker, generator=g,shuffle=False)
-    perturb_dl = DataLoader(data_perturb, batch_size=args.batch_size_train, worker_init_fn=seed_worker, generator=g, shuffle=True)
+    perturb_shuffle = not(args.precompute_sims)
+    perturb_dl = DataLoader(data_perturb, batch_size=args.batch_size_train, worker_init_fn=seed_worker, generator=g, shuffle=perturb_shuffle)
 
     device_func = lambda x, y: {"x": x.to(args.device), "y": y.to(args.device)}
     train_dl = WrappedDataLoader(train_dl, device_func)
@@ -175,7 +177,10 @@ def get_waterbird_v1(args): # confounder_strength = 0.95
     data_perturb = data_valid
     
     train_dl = get_train_loader("standard", data_train, batch_size=args.batch_size_train, worker_init_fn=seed_worker, generator=g,  num_workers=8, pin_memory=True)
-    perturb_dl = get_train_loader("standard", data_perturb, batch_size=args.batch_size_train, worker_init_fn=seed_worker, generator=g,  num_workers=8, pin_memory=True)
+    if args.precompute_sims:
+        perturb_dl = get_eval_loader("standard", data_perturb, batch_size=args.batch_size_train, worker_init_fn=seed_worker, generator=g,  num_workers=8, pin_memory=True)
+    else:
+        perturb_dl = get_train_loader("standard", data_perturb, batch_size=args.batch_size_train, worker_init_fn=seed_worker, generator=g,  num_workers=8, pin_memory=True)
     test_dl = get_eval_loader("standard", data_test, batch_size=args.batch_size_eval, worker_init_fn=seed_worker, generator=g,  num_workers=5, pin_memory=True)
     valid_dl = get_eval_loader("standard", data_valid, batch_size=args.batch_size_eval, worker_init_fn=seed_worker, generator=g,  num_workers=5, pin_memory=True)
 
@@ -216,7 +221,10 @@ def get_camelyon17(args):
     g.manual_seed(args.seed)
     
     train_dl = get_train_loader("standard", data_train, batch_size=args.batch_size_train, worker_init_fn=seed_worker, generator=g,  num_workers=8, pin_memory=True)
-    perturb_dl = get_train_loader("standard", data_perturb, batch_size=args.batch_size_train, worker_init_fn=seed_worker, generator=g,  num_workers=8, pin_memory=True)
+    if args.precompute_sims:
+        perturb_dl = get_eval_loader("standard", data_perturb, batch_size=args.batch_size_train, worker_init_fn=seed_worker, generator=g,  num_workers=8, pin_memory=True)
+    else:
+        perturb_dl = get_train_loader("standard", data_perturb, batch_size=args.batch_size_train, worker_init_fn=seed_worker, generator=g,  num_workers=8, pin_memory=True)
     test_dl = get_eval_loader("standard", data_test, batch_size=args.batch_size_eval, worker_init_fn=seed_worker, generator=g,  num_workers=5, pin_memory=True)
     valid_dl = get_eval_loader("standard", data_valid, batch_size=args.batch_size_eval, worker_init_fn=seed_worker, generator=g,  num_workers=5, pin_memory=True)
     
@@ -299,7 +307,8 @@ def get_cifar_10(args):
     train_dl = DataLoader(dataset_train, batch_size=args.batch_size_train, worker_init_fn=seed_worker, generator=g,  num_workers=8, shuffle=True)
     valid_dl = DataLoader(dataset_val, batch_size=args.batch_size_eval, worker_init_fn=seed_worker, generator=g,  num_workers=5, shuffle=False)
     test_dl = DataLoader(test_dataset, batch_size=args.batch_size_eval, worker_init_fn=seed_worker, generator=g,  num_workers=5, shuffle=False)
-    perturb_dl = DataLoader(dataset_perturbed, batch_size=args.batch_size_train, worker_init_fn=seed_worker, generator=g,  num_workers=8, shuffle=True)
+    perturb_shuffle = not(args.precompute_sims)
+    perturb_dl = DataLoader(dataset_perturbed, batch_size=args.batch_size_train, worker_init_fn=seed_worker, generator=g,  num_workers=8, shuffle=perturb_shuffle)
 
     device_func = lambda x, y, spurious_y: {"x" : x.to(args.device), "y": y.to(args.device), "spurious_y":spurious_y.to(args.device)}
     train_dl = WrappedDataLoader(train_dl, device_func)
@@ -310,12 +319,8 @@ def get_cifar_10(args):
     return train_dl, valid_dl, test_dl, perturb_dl
 
 def get_dataset(args):
-    if args.dataset == 'kaggle-bird':
-        if args.perturb_type == 'ood_is_test':
-            return get_kaggle_bird_dl_v1(args)
-        else:
-            NotImplementedError(f"Version of perturbations '{args.perturb_type}' not implemented for dataset '{args.dataset}'.")
-    elif args.dataset == 'camelyon17':
+
+    if args.dataset == 'camelyon17':
         return get_camelyon17(args=args)
     elif args.dataset == 'waterbird':
         if args.perturb_type == 'ood_is_test':

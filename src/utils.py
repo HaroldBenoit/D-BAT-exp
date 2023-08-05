@@ -27,16 +27,6 @@ def collate_list(vec):
     else:
         raise TypeError("Elements of the list to collate must be tensors or dicts.")
 
-def dl_to_sampler(dl):
-    dl_iter = iter(dl)
-    def sample():
-        nonlocal dl_iter
-        try:
-            return next(dl_iter)
-        except StopIteration:
-            dl_iter = iter(dl)
-            return next(dl_iter)
-    return sample
 
 
 @torch.no_grad()
@@ -70,6 +60,14 @@ def get_acc(model, dl, return_logits=False):
 
     return res
 
+def get_metas(dl):
+    metas = []
+    for batch in dl:
+        if  "meta" in batch:
+            metas.append(batch["meta"].tolist())
+    
+    return metas
+
 
 @torch.no_grad()
 def get_acc_ensemble(ensemble, dl, return_meta=False):
@@ -101,27 +99,20 @@ def heatmap_fig(s, vmin=0.0, vmax=1.0):
 
 
 @torch.no_grad()
-def get_batchwise_ensemble_similarity_logs(ensemble, x_tilde):
-    preds = []
+def get_batchwise_ensemble_similarity_logs(preds):
 
-    for model in ensemble:
-        model.eval()
-        out = torch.softmax(model(x_tilde), dim=1) ## B*n_classes
-        pred = torch.argmax(out, dim=1)  ## B*1
-        preds.append(pred)
 
     logs = {}
-
     sims= []
-    pairwise_indexes = list(combinations(range(len(ensemble)),2))
+    pairwise_indexes = list(combinations(range(len(preds)),2))
     for idx1, idx2 in pairwise_indexes:
         similarity = (preds[idx1] == preds[idx2]).float().cpu().mean()
         sims.append(similarity)
 
     sims = np.array(sims)
-    logs[f"unlabeled/similarity_mean_{len(ensemble)}"] = sims.mean()
-    logs[f"unlabeled/similarity_min_{len(ensemble)}"] = sims.min()
-    logs[f"unlabeled/similarity_max_{len(ensemble)}"] = sims.max()
+    logs[f"unlabeled/similarity_mean_{len(preds)}"] = sims.mean()
+    logs[f"unlabeled/similarity_min_{len(preds)}"] = sims.min()
+    logs[f"unlabeled/similarity_max_{len(preds)}"] = sims.max()
 
     # for model in ensemble:
     #     model.train()
@@ -140,7 +131,7 @@ def get_ensemble_similarity(ensemble, dl, num_trained_models):
 
     for batch in dl:
         X = batch["x"]
-        outs = []
+        out = None
         for model in ensemble:
             out = torch.softmax(model(X), dim=1) ## B*n_classes
             out = torch.argmax(out, dim=1)  ## B*1
