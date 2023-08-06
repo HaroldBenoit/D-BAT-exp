@@ -86,7 +86,7 @@ def get_args():
 
     ### optimization of running time and memory params
 
-    parser.add_argument("--precompute_sims", default=False, action="store_true")
+    parser.add_argument("--no_precompute_sims", default=True, action="store_false", dest="precompute_sims")
     parser.add_argument("--compute_val_sims_during_training", default=False, action="store_true")
 
     args_config, remaining = config_parser.parse_known_args()
@@ -240,9 +240,24 @@ def print_gpu_memory(args):
     available_memory = torch.cuda.get_device_properties(args.device).total_memory - torch.cuda.memory_allocated(args.device)
     print(f"Available GPU memory: {available_memory / 1e9} GB")  # Convert bytes to gigabytes
 
+def precompute_sims(model, perturb_sampler, save_folder):
+    model.eval()
+    for i in range(perturb_sampler.num_batches):
+        x_tilde = perturb_sampler()["x"]
+        probs_path = os.path.join(save_folder, f"probs_perturb_batch{perturb_sampler.counter}.tmp")
+        probs = torch.softmax(model(x_tilde), dim=1).unsqueeze(0).cpu().detach().clone()
+        ## need to create it
+        if not os.path.exists(probs_path):
+            torch.save(probs, probs_path)
+        else:
+            past_probs = torch.load(probs_path)
+            torch.save(torch.cat((past_probs,probs)), probs_path)
+            
+
 
 def train(args, get_opt, train_dl, valid_dl, test_dl, perturb_dl, get_scheduler=None, 
           eval_freq=400, ckpt_freq=1, save_folder="",ckpt_path="", alpha=1.0, use_diversity_reg=True, dbat_loss_type='v1', extra_args=None):
+    
     
     ## getting models list
     if isinstance(args.model, str):
@@ -371,11 +386,11 @@ def train(args, get_opt, train_dl, valid_dl, test_dl, perturb_dl, get_scheduler=
                         curr_model_preds = torch.argmax(out, dim=1) 
                         preds = []
 
-                        for model_idx in range(m_idx):
+                        for model_number in range(m_idx):
                             if args.precompute_sims:
-                                out = precomputed_preds[perturb_sampler.counter][model_idx].to(args.device)
+                                out = precomputed_preds[perturb_sampler.counter][model_number].to(args.device)
                             else:
-                                model = get_frozen_model(save_folder=save_folder, model_number=model_idx).eval()
+                                model = get_frozen_model(save_folder=save_folder, model_number=model_number).eval()
                                 out = torch.softmax(model(x_tilde), dim=1) ## B*n_classes
                                 del model
                                 gc.collect()
@@ -523,17 +538,8 @@ def train(args, get_opt, train_dl, valid_dl, test_dl, perturb_dl, get_scheduler=
             save_frozen_model(save_folder=save_folder, model_number=m_idx, model=m)
             ## precomputing preds for now frozen model
             if args.precompute_sims:
-                for i in range(perturb_sampler.num_batches):
-                    x_tilde = perturb_sampler()["x"]
-                    probs_path = os.path.join(save_folder, f"probs_perturb_batch{perturb_sampler.counter}.tmp")
-                    probs = torch.softmax(m(x_tilde), dim=1).unsqueeze(0).cpu().detach().clone()
-                    ## need to create it
-                    if not os.path.exists(probs_path):
-                        torch.save(probs, probs_path)
-                    else:
-                        past_probs = torch.load(probs_path)
-                        torch.save(torch.cat((past_probs,probs)), probs_path)
-            
+                precompute_sims(model=m, perturb_sampler=perturb_sampler, save_folder=save_folder)
+
             ## VERY IMPORTANT, NOT TO OVERLOAD CUDA MEMORY
 
             #print_gpu_memory(args)
@@ -550,6 +556,7 @@ def train(args, get_opt, train_dl, valid_dl, test_dl, perturb_dl, get_scheduler=
     
 
     ## TESTING
+    print("Training done, validation and testing...")
     logs={}
     for split in ["val","test"]:
         stats[f'{split}-acc'] = []
@@ -557,7 +564,7 @@ def train(args, get_opt, train_dl, valid_dl, test_dl, perturb_dl, get_scheduler=
         stats[f"{split}-logits"] = []
         dl = test_dl if split == "test" else valid_dl
         for model_number in range(args.ensemble_size): # test acc for each predictor in ensemble
-            model = get_frozen_model(save_folder=save_folder, model_number=model_idx).eval()
+            model = get_frozen_model(save_folder=save_folder, model_number=model_number).eval()
             out = torch.softmax(model(x_tilde), dim=1) ## B*n_classes
 
             model.eval() 

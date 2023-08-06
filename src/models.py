@@ -6,6 +6,20 @@ import numpy as np
 from resnet_simclr import get_resnet
 from robust_resnet import get_robust_resnet50
 from debiased_resnet import Model
+from transformers import ViTForImageClassification
+
+## wrapper around vit from hugging face
+class LogitsViT(nn.Module):
+
+    def __init__(self, original_model):
+        super(LogitsViT, self).__init__()
+        self.original_model = original_model
+
+    def forward(self, *args, **kwargs):
+        original_output = self.original_model(*args, **kwargs)
+        return original_output.logits
+
+
     
 def get_model_func(args, model):
 
@@ -48,6 +62,22 @@ def get_model_func(args, model):
             m = model_zoo.vit_b_16(weights=pretrained)
             m.heads = nn.Linear(in_features=768, out_features=n_classes, bias=True)
             return m.to(args.device)
+        
+        return m_f
+    elif model == "vit_mae":
+        def m_f():
+            model = ViTForImageClassification.from_pretrained("facebook/vit-mae-base")
+            model.classifier = nn.Linear(in_features=768, out_features=n_classes, bias=True)
+            model = LogitsViT(model)
+            return model.to(args.device)
+        
+        return m_f
+    elif model == "vit_dino":
+        def m_f():
+            model = ViTForImageClassification.from_pretrained("facebook/dino-vitb16")
+            model.classifier = nn.Linear(in_features=768, out_features=n_classes, bias=True)
+            model = LogitsViT(model)
+            return model.to(args.device)
         
         return m_f
     elif model == "resnet50SwAV":

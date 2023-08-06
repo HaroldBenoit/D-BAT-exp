@@ -57,7 +57,7 @@ def process_dataset_65_classes_office_home(datasets, device=None, shuffle=True):
 def get_OH_65classes_v1(args):
 
 
-    if "vit_b_16" in args.model:
+    if "vit_mae" in args.model or "vit_dino" in args.model or "vit_b_16":
         saved_data_train_path = "/datasets/home/hbenoit/D-BAT-exp/datasets/office_home_train_vit.pt"
         saved_data_test_path = "/datasets/home/hbenoit/D-BAT-exp/datasets/office_home_test_vit.pt"
         data_transform = transforms.Compose([
